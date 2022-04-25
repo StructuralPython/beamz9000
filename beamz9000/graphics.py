@@ -4,7 +4,7 @@ import matplotlib.transforms as transforms
 import matplotlib.axes as axes
 
 
-def get_translation_transform(
+def get_svg_translation_transform(
     ax: axes.Axes = None, 
     path_patch: patches.PathPatch = None,
     target: tuple[float, float] = None,
@@ -19,7 +19,7 @@ def get_translation_transform(
     axes: a matplotlib axes object
     path_patch: a matplotlib PathPatch object
     target: an x, y tuple of coordinates within the data space of 'axes'
-    'anchor_location': a string that is two of the following words separated by a space.
+    anchor_location: a string that is two of the following words separated by a space.
         "top", "bottom", "left", "right", "center"
         e.g. "top left", "right bottom", "center center", "center right"
     """

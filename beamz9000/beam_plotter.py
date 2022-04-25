@@ -31,14 +31,15 @@ class BeamPlotter:
             6: pathlib.Path(__file__).parent / "svg_supports" / self.style / "M_SPRING.svg",
             7: pathlib.Path(__file__).parent / "svg_supports" / self.style / "T_SPRING.svg",
         }
+        
 
-    def plot(self, style='default'):
+    def plot(self, style='default', **kwargs):
         fig, ax = self.init_plot()
-        fig, ax = self.add_beam_plot(fig, ax)
-        fig, ax = self.add_loads(fig, ax)
-        fig, ax = self.add_beam_supports(fig, ax)
-        fig, ax = self.add_node_labels(fig, ax)
-        fig, ax = self.add_dimensions(fig, ax)
+        fig, ax = self.add_beam_plot(fig, ax, **kwargs)
+        fig, ax = self.add_loads(fig, ax, **kwargs)
+        fig, ax = self.add_beam_supports(fig, ax, **kwargs)
+        fig, ax = self.add_node_labels(fig, ax, **kwargs)
+        fig, ax = self.add_dimensions(fig, ax, **kwargs)
 
         return fig, ax
     
@@ -73,7 +74,7 @@ class BeamPlotter:
         """
         for support in self.beam.supports:
             support_patch = svg_to_path.load_svg_file(self.support_svgs[int(support.fixity)])
-            translation = graphics.get_translation_transform(ax, support_patch, (support.location.x, -self.beam.depth/2), "top center", 2)
+            translation = graphics.get_svg_translation_transform(ax, support_patch, (support.location.x, -self.beam.depth/2), "top center", 2)
             support_patch.set_transform(translation)
             support_patch.set(**kwargs)
             # print((support_patch.get_verts()))
@@ -102,7 +103,7 @@ class BeamPlotter:
         return fig, ax
                 
 
-    def get_label_text(label: Union[str, Label]) -> str:
+    def get_label_text(label: Union[str, Label], **kwargs) -> str:
         """
         Returns the label text from the data in a label attribute on any object in the
         model module.
