@@ -31,7 +31,6 @@ def get_svg_translation_transform(
     anchor_to_origin_transform = anchor_to_origin.translate(-svg_anchor_x, -svg_anchor_y)
     scale_transform = get_scale_transform(scale_factor)
     translate_transform = transforms.ScaledTranslation(target_x, target_y, ax.transData)
-    # translate_transform.translate(offset_x, offset_y)
     return svg_flip + anchor_to_origin_transform + scale_transform + translate_transform
 
 
@@ -45,6 +44,7 @@ def get_svg_flip_transform() -> transforms.Transform:
     flip.scale(1, -1)
     return flip
 
+
 def get_scale_transform(scale_factor: float) -> transforms.Transform():
     """
     Returns a scale transform set to scale the patch by 'scale_factor'
@@ -52,6 +52,22 @@ def get_scale_transform(scale_factor: float) -> transforms.Transform():
     scale = transforms.Affine2D()
     scale.scale(scale_factor)
     return scale
+
+
+def get_extent(patch: patches.Patch, axis: str, extent: str) -> float:
+    """
+    patch: a patch
+    axis: a string, either "x" or "y"
+    extent: a string, either "min" or "max"
+    """
+    bbox = patch.get_extents()
+    extents = {
+        "xmin": bbox.xmin,
+        "ymin": bbox.ymin,
+        "xmax": bbox.xmax,
+        "ymax": bbox.ymax,
+    }
+    return extents[f"{axis}{extent}"]
 
 
 def get_anchor_point(path_patch: patches.PathPatch, location: str) -> tuple[float, float]:
@@ -63,7 +79,6 @@ def get_anchor_point(path_patch: patches.PathPatch, location: str) -> tuple[floa
     """
     bbox = path_patch.get_extents()
     xmin, ymin, xmax, ymax = bbox.xmin, bbox.ymin, bbox.xmax, bbox.ymax
-    # print(xmin, ymin, xmax, ymax)
 
     if len(location.split()) != 2:
         raise ValueError(
