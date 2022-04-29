@@ -38,6 +38,16 @@ class BeamPlotter:
         self.misc_svgs = {
             "DIM_TICKS": pathlib.Path(__file__).parent / self.style / "misc"  / "DIM_TICK.svg",
         }
+        self.strata = {
+            "max_load_depth": self.beam.depth * 4/3,
+            "beam_top": self.beam.depth / 2,
+            "beam_bottom": -self.beam.depth / 2,
+            "gap": self.beam.depth * 0.05,
+            "support_depth": self.beam.depth / 2,
+            "ground_depth": self.beam.depth / 4,
+            "displacement_depth": self.beam.depth * 2/3,
+            "dimension_depth": self.beam.depth / 2,
+        }
         
 
     def plot(self, style='default', **kwargs):
@@ -48,6 +58,7 @@ class BeamPlotter:
         fig, ax = self.add_node_labels(fig, ax, **kwargs)
         fig, ax = self.add_dimensions(fig, ax, y_offset=-2, **kwargs)
         return fig, ax
+
     
     def init_plot(self, **kwargs) -> tuple[plt.figure, plt.axes]:
         """
@@ -79,6 +90,7 @@ class BeamPlotter:
          # Background beam plot to automatically set axes extents ## HACK
         ax.plot(beam_x_ords, beam_y_ords, alpha=0)
         ax.add_patch(path_patch)
+        print(graphics.get_svg_depth(ax, path_patch))
         return fig, ax
 
     def add_beam_supports(self, fig, ax, **kwargs) -> tuple[plt.figure, plt.axes]:
@@ -97,11 +109,7 @@ class BeamPlotter:
             )
             support_patch.set_transform(translation)
             support_patch.set(**kwargs)
-            # ymin = graphics.get_extent(support_patch, axis="y", extent="min")
-            # # print(lower_extent)
-            # lower_extent = ax.transData.inverted().transform([0, min(lower_extent, ymin)])[1]
             ax.add_patch(support_patch)
-            # print(lower_extent)
 
             ## Add node label
             ax.annotate(
@@ -110,8 +118,7 @@ class BeamPlotter:
                 horizontalalignment='center',
                 size=14
             )
-
-        return fig, ax#, lower_extent
+        return fig, ax
 
 
     def add_loads(self, fig, ax, **kwargs) -> tuple[plt.figure, plt.axes]:
@@ -142,7 +149,7 @@ class BeamPlotter:
             )
             dim_tick.set_transform(transform)
             dim_tick.set(**kwargs)
-            dim_tick.set_zorder(3)
+            dim_tick.set_zorder(-3)
             ax.add_patch(dim_tick)
 
             # Plot dim labels

@@ -4,6 +4,22 @@ import matplotlib.transforms as transforms
 import matplotlib.axes as axes
 
 
+def get_svg_size(ax: axes.Axes, path_patch: patches.PathPatch):
+    """
+    Returns the depth (y-dimension) of 'path_patch' when transformed into
+    the data-space coordinate system in 'ax'.
+    """
+    ymin = get_extent(path_patch, "y", "min")
+    ymax = get_extent(path_patch, "y", "max")
+    xmin = get_extent(path_patch, "x", "min")
+    xmax = get_extent(path_patch, "x", "max")
+    x_min_data, y_min_data = ax.transData.inverted().transform([xmin, ymin])
+    x_max_data, y_max_data = ax.transData.inverted().transform([xmax, ymax])
+    y_range = abs(y_max_data - y_min_data)
+    x_range = abs(x_max_data - x_min_data)
+    return x_range, y_range
+
+
 def get_svg_translation_transform(
     ax: axes.Axes = None, 
     path_patch: patches.PathPatch = None,
