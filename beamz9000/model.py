@@ -6,6 +6,7 @@ from matplotlib import pyplot
  
 
 Number: Union[int, float]
+NUMBER = (float, int)
 
 @dataclass
 class Label:
@@ -23,7 +24,7 @@ class Label:
     LA01 = Label("A", 0.5, 1.0)
     LA02 = Label("B", 1, 3, {"font_size": 1})
     """
-    text: str
+    text: Optional[str] = None
     x_offset: Optional[Number] = None
     y_offset: Optional[Number] = None
     text_properties: Optional[dict] = None
@@ -52,6 +53,12 @@ class Node:
     x: Number
     label: Optional[Union[Label, str]] = None
 
+    def __post_init__(self):
+        if isinstance(self.label, str):
+            self.label = Label(self.label)
+        elif self.label is None:
+            self.label = Label()
+
     def __str__(self):
         return _alternate_dataclass_repr(self)
 
@@ -59,11 +66,14 @@ class Node:
 class Fixity(IntEnum):
     """
     The Fixity quality that applies to a Support.
-    FREE = 0
-    H_ROLLER = 1
-    V_ROLLER = -1
+    H_ROLLER = 0
+    V_ROLLER = 1
     PINNED = 2
     FIXED = 3
+    H_SPRING = 4
+    V_SPRING = 5
+    M_SPRING = 6
+    T_SPRING = 7
 
     # Examples:
     FREE = Fixity(0)
@@ -104,6 +114,13 @@ class Support:
     fixity: Union[Fixity, int]
     label: Optional[Label] = None
 
+    def __post_init__(self):
+        if isinstance(self.location, NUMBER):
+            node = Node(self.location, label=Label(self.label))
+            self.location = node
+        if self.label is None or isinstance(self.label, str):
+            self.label = Label(self.label)
+
     def __str__(self):
         return _alternate_dataclass_repr(self)
 
@@ -120,6 +137,10 @@ class Joint:
     location: Union[Node, str, Number]
     fixity: Union[Fixity, int]
     label: Optional[Label] = None
+
+    def __post_init__(self):
+        if isinstance(self.label, str):
+            self.label = Label(self.label)
 
     def __str__(self):
         return _alternate_dataclass_repr(self)
@@ -169,6 +190,10 @@ class Load:
     moment: bool = False
     alpha: float = 0.0 # Angle in degrees
     label: Optional[Label] = None
+
+    def __post_init__(self):
+        if isinstance(self.label, str):
+            self.label = Label(self.label)
 
     def __str__(self):
         return _alternate_dataclass_repr(self)
@@ -232,9 +257,34 @@ class Beam:
                 if isinstance(node.label, str):
                     node.label = Label(node.label)
                 new_nodes.append(node)
-
-
         self.nodes = new_nodes
+
+        for support in self.supports:
+            if isinstance(support.location, str):
+                node = _lookup_node(support, self.nodes)
+                if node is None:
+                    raise ValueError(f"Support is at node with label: {support} but no node with this label exists.")
+                else:
+                    support.location = node
+
+        processed_dimensions = []
+        for loc in self.dimensions:
+            if isinstance(loc, NUMBER):
+                node = Node(loc)
+                processed_dimensions.append(node)
+            elif isinstance(loc, str):
+                node = _lookup_node(loc, self.nodes)
+                if node is None:
+                    raise ValueError(f"A dimension is given for a node with label: {loc} but no node with this label exists.")
+                else:
+                    processed_dimensions.append(node)
+        self.dimensions = processed_dimensions
+
+
+        if self.depth is None:
+            self.depth = 0
+
+        
 
     def __str__(self):
         return _alternate_dataclass_repr(self)    
@@ -316,3 +366,12 @@ def _alternate_dataclass_repr(object) -> None:
     class_name = object.__class__.__name__
     repr_string = f"{class_name}(" + ", ".join([f"{field}={value}" for field, value in populated_fields.items()]) + ")"
     return repr_string
+
+
+def _lookup_node(node_label: str, nodes: list[Node]) -> Optional[Node]:
+    """
+    Returns a Node object if 'node_label' is a match for node.label in 'nodes'.
+    Returns None, otherwise.
+    """
+    node = next((node for node in self.nodes if node.label == support)) or None
+    return node

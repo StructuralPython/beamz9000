@@ -90,7 +90,6 @@ class BeamPlotter:
          # Background beam plot to automatically set axes extents ## HACK
         ax.plot(beam_x_ords, beam_y_ords, alpha=0)
         ax.add_patch(path_patch)
-        print(graphics.get_svg_depth(ax, path_patch))
         return fig, ax
 
     def add_beam_supports(self, fig, ax, **kwargs) -> tuple[plt.figure, plt.axes]:
@@ -112,12 +111,13 @@ class BeamPlotter:
             ax.add_patch(support_patch)
 
             ## Add node label
-            ax.annotate(
-                f"{support.location.label.text}",
-                xy=(support.location.x, -self.beam.depth/2),
-                horizontalalignment='center',
-                size=14
-            )
+            if support.location.label.text is not None:
+                ax.annotate(
+                    f"{support.location.label.text}",
+                    xy=(support.location.x, -self.beam.depth/2),
+                    horizontalalignment='center',
+                    size=14
+                )
         return fig, ax
 
 
@@ -152,7 +152,7 @@ class BeamPlotter:
             dim_tick.set_zorder(-3)
             ax.add_patch(dim_tick)
 
-            # Plot dim labels
+        # Plot dim labels
         prev_span = 0
         for span in self.beam.get_spans():
             ax.annotate(
