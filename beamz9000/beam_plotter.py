@@ -4,7 +4,7 @@ from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 import numpy as np
 import pathlib
-from beamz9000.model import Label, Node, Support, Fixity, Joint, Beam
+from beamz9000.model import Label, Node, Support, Fixity, Joint, Beam, Load
 import beamz9000.graphics as graphics
 import beamz9000.svg_to_path as svg_to_path
 import copy
@@ -125,7 +125,38 @@ class BeamPlotter:
         """
         Returns fig, ax with load graphics added
         """
+        max_load_depth = self.strata['max_load_depth']
+        for load in self.beam.loads:
+            pass
         return fig, ax
+
+    @staticmethod
+    def get_relative_load_depths(self, loads: list[Load]) -> list[Optional[float]]:
+        """
+        Returns a list representing the relative maximum magnitudes of the loads
+        in 'loads' on a scale of 0.0 to 1.0. If a returned value is None it represents
+        that the relative magnitudes does not apply to this load type (e.g. moments).
+        """
+        max_magnitude_load = self.get_max_magnitude(loads)
+        max_magnitude = max([max_magnitude_load.magnitude, max_magnitude_load.end_magnitude or 0])
+        relative_depths = []
+        for load in loads:
+            if load.moment:
+                relative_depths.append(None)
+            else:
+                current_max = max([load.magnitude, load.end_magnitude or 0])
+                relative_depths.append(current_max / max_magnitude)
+        return relative_depths
+
+    @staticmethod
+    def get_max_magnitude(loads: list[Load]) -> Load:
+        """
+        Returns the Load with the absolute maximume load magnitude from all of the Load in 'loads'.
+        """
+        start_magnitude = max(loads, key=lambda x: abs(x.magnitude))
+        end_magnitude = max(loads, key=lambda x: abs(x.end_magnitude) if x.end_magnitude else 0)
+        max_magnitude = max([start_magnitude, end_magnitude or 0])
+        return max_magnitude
 
 
     def add_dimensions(self, fig, ax, y_offset=0, **kwargs) -> tuple[plt.figure, plt.axes]:
@@ -135,7 +166,7 @@ class BeamPlotter:
         dim_tick_patch = svg_to_path.load_svg_file(self.misc_svgs["DIM_TICKS"])
         paths = []
         ticks = []
-        for idx, node in enumerate(self.beam.dimensions):
+        for node in self.beam.dimensions:
             paths.append([node.x, y_offset])
 
             # Plot ticks

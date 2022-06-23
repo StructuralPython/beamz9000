@@ -194,6 +194,8 @@ class Load:
     def __post_init__(self):
         if isinstance(self.label, str):
             self.label = Label(self.label)
+        elif self.label is None:
+            self.label = Label()
 
     def __str__(self):
         return _alternate_dataclass_repr(self)
