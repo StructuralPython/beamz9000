@@ -151,26 +151,30 @@ class Load:
     """
     A generic dataclass representing any kind of load that may occur on a beam plot.
 
-    type: str - May be one of "moment", "point", "linear" # Could also be an IntEnum
     magnitude: int or float - The magnitude of the load. If the load is of type "linear", then magnitude
         represents the starting magnitude of the linear load.
         +ve values: point in positive x,y-axis ("up", "right") and rotate anti-clock-wise.
         -ve values: point in negative x,y-axis ("down", "left") and rotate clock-wise.
     location: Node - The location on the beam of the load. If the load is of type "linear", then location
         represents the starting location of the linear load.
-    end_magnitude: optional, None - If the load is of type "linear" then this represents the end magnitude
-        of the linear load. If the type is "linear" and end_magnitude is None, then the linear load
-        will be assumed to be a uniform load of the start magnitude.
-        Ignored on types "moment" and "point".
+    end_magnitude: optional, None - If provided, the load will be interpreted as a trapezoidal
+        load starting from 'location' and ending at the end of the beam with a magnitude of 'end_magnitude'.
+        If moment=True, then end_magnitude is ignored.
+        If torque=True, then the load will be a "trapezoidal" distributed torque load ending at the
+        end of the beam.
         +ve values: point in positive x,y-axis ("up", "right") and rotate clock-wise.
         -ve values: point in negative x,y-axis ("down", "left") and rotate anti-clock-wise.
-    end_location: optional, None - If the load is of type "linear" then this represents the end location
-        of the linear load. If the type fo load is "linear" and end_location is None, then the linear load
-        will be assumed to end at the end of the Beam object it is assigned to.
-    alpha: float, 0.0 - describes the angle at which the load is to be applied. Measured in radians deviation 
-        from vertical. Default value of 0.0 refers to a vertically applied load. Ignored if type is "moment".
+    end_location: optional, None - For a distributed load or a distributed torque, represents the location
+        where the load ends. If end_location is provided, then end_magnitude must also be supplied.
+    alpha: float, 0.0 - Applies only to point loads. Describes the angle at which the load is to be applied. 
+        Measured in degrees deviation from vertical. Default value of 0.0 refers to a vertically applied load
+        Ignored if either moment=True or torque=True.
         +ve values: rotates the "tail" of the load arrow(s) anti-clock-wise.
         -ve values: rotates the "tail" of the load arrow(s) clock-wise.
+    moment: bool - If True, the load will be interpreted as a point moment
+    torque: bool - If True, the load will be interpreted as either a point torque or distributed torque,
+        depending on other inputs.
+        If both torque and moment are True, torque will take precedence.
 
     ## Examples
     N00 = Node(0, "A")
@@ -180,7 +184,7 @@ class Load:
     L02 = Load(45, N00, 5.2) # UDL from starting from N00 to ending at 5.2
     L03 = Load(45, N00, 5.2, 100) # Trapezoidal load: 45 @ N00 (start) -> 100 @ 5.2 (end)
     L04 = Load(45, N00, 5.2, moment=True) # Uniform distributed torsion load: 45 @ N00 (start) -> 5.2 (end)
-    L05 = Load(45, N00, moment=True, alpha=90) # Point torsion @ N00
+    L05 = Load(45, N00, torque=True) # Point torsion @ N00
     L06 = Load(45, )
     """
     magnitude: Number
@@ -247,7 +251,6 @@ class Beam:
     joints: Optional[list[Joint]] = None
     depth: Optional[Union[Number, list[Number]]] = None
     dimensions: Optional[list[Union[Node, str]]] = None
-    fig = None
 
     def __post_init__(self):
         new_nodes = []
@@ -281,12 +284,8 @@ class Beam:
                 else:
                     processed_dimensions.append(node)
         self.dimensions = processed_dimensions
-
-
         if self.depth is None:
             self.depth = 0
-
-        
 
     def __str__(self):
         return _alternate_dataclass_repr(self)    

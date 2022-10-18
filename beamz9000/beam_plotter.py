@@ -130,34 +130,6 @@ class BeamPlotter:
             pass
         return fig, ax
 
-    @staticmethod
-    def get_relative_load_depths(self, loads: list[Load]) -> list[Optional[float]]:
-        """
-        Returns a list representing the relative maximum magnitudes of the loads
-        in 'loads' on a scale of 0.0 to 1.0. If a returned value is None it represents
-        that the relative magnitudes does not apply to this load type (e.g. moments).
-        """
-        max_magnitude_load = self.get_max_magnitude(loads)
-        max_magnitude = max([max_magnitude_load.magnitude, max_magnitude_load.end_magnitude or 0])
-        relative_depths = []
-        for load in loads:
-            if load.moment:
-                relative_depths.append(None)
-            else:
-                current_max = max([load.magnitude, load.end_magnitude or 0])
-                relative_depths.append(current_max / max_magnitude)
-        return relative_depths
-
-    @staticmethod
-    def get_max_magnitude(loads: list[Load]) -> Load:
-        """
-        Returns the Load with the absolute maximume load magnitude from all of the Load in 'loads'.
-        """
-        start_magnitude = max(loads, key=lambda x: abs(x.magnitude))
-        end_magnitude = max(loads, key=lambda x: abs(x.end_magnitude) if x.end_magnitude else 0)
-        max_magnitude = max([start_magnitude, end_magnitude or 0])
-        return max_magnitude
-
 
     def add_dimensions(self, fig, ax, y_offset=0, **kwargs) -> tuple[plt.figure, plt.axes]:
         """
@@ -217,3 +189,46 @@ class BeamPlotter:
             return label.text
         else: 
             return str(label)
+
+
+def get_relative_load_depths(self, loads: list[Load]) -> dict[Optional[float]]:
+    """
+    Returns a list representing the relative maximum magnitudes of the loads
+    in 'loads' on a scale of 0.0 to 1.0. If a returned value is None it represents
+    that the relative magnitudes does not apply to this load type (e.g. moments).
+    """
+    max_magnitude_load = self.get_max_magnitude(loads)
+    max_magnitude = max([max_magnitude_load.magnitude, max_magnitude_load.end_magnitude or 0])
+    relative_depths = []
+    for load in loads:
+        if load.moment:
+            relative_depths.append(None)
+        else:
+            current_max = max([load.magnitude, load.end_magnitude or 0])
+            relative_depths.append(current_max / max_magnitude)
+    return relative_depths
+
+
+def get_max_magnitude(loads: list[Load]) -> Load:
+    """
+    Returns the Load with the absolute maximume load magnitude from all of the Load in 'loads'.
+    """
+    start_magnitude = max(loads, key=lambda x: abs(x.magnitude))
+    end_magnitude = max(loads, key=lambda x: abs(x.end_magnitude) if x.end_magnitude else 0)
+    max_magnitude = max([start_magnitude, end_magnitude or 0])
+    return max_magnitude
+
+
+def categorize_loads(loads: list[Load]) -> dict[str, list[Load]]:
+    """
+    Returns a dictionary representing the different categories of loads.
+    This is required to properly scale different loads to the assigned 
+    strata depth so that the largest magnitude load fulls the strata depth.
+
+    Load categories:
+    "POINT", "DISTRIBUTED", "POINT_MOMENT", "POINT_TORQUE", "DISTRIBUTED TORQUE"
+    """
+    categorized_loads = {}
+    for load in loads:
+        if load.end_location and load.moment and :
+            load_acc = categorized_loads.get("DISTRIBUTED")
