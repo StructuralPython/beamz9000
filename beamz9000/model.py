@@ -18,6 +18,7 @@ class Label:
     y_offset: Optional, None - The y coordinate offset from the associated Node
     text_properties: Optional, None - A dictionary of label display properties associated
         with the plotting backend. Passed on directly to the plotting backend.
+        Currently only matplotlib is supported as a plotting backend.
 
     ## Examples
     LA00 = Label("")
@@ -67,30 +68,26 @@ class Fixity(IntEnum):
     """
     The Fixity quality that applies to a Support.
     H_ROLLER = 0
-    V_ROLLER = 1
-    PINNED = 2
-    FIXED = 3
-    H_SPRING = 4
-    V_SPRING = 5
-    M_SPRING = 6
-    T_SPRING = 7
+    V_ROLLER = 1 # Applies only at beam ends
+    PINNED = 2 
+    FIXED = 3 # Applies only at beam ends
+    V_SPRING = 4
+    M_SPRING = 5
 
     # Examples:
-    FREE = Fixity(0)
-    H_ROLLER = Fixity(1)
-    V_ROLLER = Fixity(-1)
+    H_ROLLER = Fixity(0)
+    V_ROLLER = Fixity(1)
     PINNED = Fixity(2)
     FIXED = Fixity(3)
+    V_SPRING = Fixity(4)
+    M_SPRING = Fixity(5)
     """
     H_ROLLER = 0
     V_ROLLER = 1
     PINNED = 2
     FIXED = 3
-    H_SPRING = 4
-    V_SPRING = 5
-    M_SPRING = 6
-    T_SPRING = 7
-
+    V_SPRING = 4
+    M_SPRING = 5
 
 
 @dataclass
@@ -171,28 +168,23 @@ class Load:
         Ignored if either moment=True or torque=True.
         +ve values: rotates the "tail" of the load arrow(s) anti-clock-wise.
         -ve values: rotates the "tail" of the load arrow(s) clock-wise.
-    moment: bool - If True, the load will be interpreted as a point moment
-    torque: bool - If True, the load will be interpreted as either a point torque or distributed torque,
-        depending on other inputs.
-        If both torque and moment are True, torque will take precedence.
+    moment: bool - If True, the load will be interpreted as a point moment with 'magnitude' at 'location'
 
     ## Examples
     N00 = Node(0, "A")
 
     L00 = Load(45, N00) # Point load @ N00
     L01 = Load(45, N00, moment=True) # Point moment @ N00
-    L02 = Load(45, N00, 5.2) # UDL from starting from N00 to ending at 5.2
+    L02 = Load(45, N00, 5.2) # UDL from starting from N00 and ending at 5.2
     L03 = Load(45, N00, 5.2, 100) # Trapezoidal load: 45 @ N00 (start) -> 100 @ 5.2 (end)
-    L04 = Load(45, N00, 5.2, moment=True) # Uniform distributed torsion load: 45 @ N00 (start) -> 5.2 (end)
-    L05 = Load(45, N00, torque=True) # Point torsion @ N00
-    L06 = Load(45, )
+    L04 = Load(45, N00, 45) # UDL with magnitude of 45 over the beam length
     """
     magnitude: Number
     start_location: Union[Node, str, Number]
     end_location: Optional[Union[Node, str, Number]] = None
     end_magnitude: Number = None
     moment: bool = False
-    alpha: float = 0.0 # Angle in degrees
+    alpha: float = 0.0 # Angle in degrees deviation from vertical
     label: Optional[Label] = None
 
     def __post_init__(self):
@@ -374,5 +366,5 @@ def _lookup_node(node_label: str, nodes: list[Node]) -> Optional[Node]:
     Returns a Node object if 'node_label' is a match for node.label in 'nodes'.
     Returns None, otherwise.
     """
-    node = next((node for node in self.nodes if node.label == support)) or None
+    node = next((node for node in nodes if node.label == node_label)) or None
     return node

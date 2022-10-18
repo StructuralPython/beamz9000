@@ -219,16 +219,16 @@ def get_max_magnitude(loads: list[Load]) -> Load:
     return max_magnitude
 
 
-def categorize_loads(loads: list[Load]) -> dict[str, list[Load]]:
-    """
-    Returns a dictionary representing the different categories of loads.
-    This is required to properly scale different loads to the assigned 
-    strata depth so that the largest magnitude load fulls the strata depth.
+# def categorize_loads(loads: list[Load]) -> dict[str, list[Load]]:
+#     """
+#     Returns a dictionary representing the different categories of loads.
+#     This is required to properly scale different loads to the assigned 
+#     strata depth so that the largest magnitude load fulls the strata depth.
 
-    Load categories:
-    "POINT", "DISTRIBUTED", "POINT_MOMENT", "POINT_TORQUE", "DISTRIBUTED TORQUE"
-    """
-    categorized_loads = {}
-    for load in loads:
-        if load.end_location and load.moment and :
-            load_acc = categorized_loads.get("DISTRIBUTED")
+#     Load categories:
+#     "POINT", "DISTRIBUTED", "POINT_MOMENT", "POINT_TORQUE", "DISTRIBUTED TORQUE"
+#     """
+#     categorized_loads = {}
+#     for load in loads:
+#         if load.end_location and load.moment and :
+#             load_acc = categorized_loads.get("DISTRIBUTED")
