@@ -2,6 +2,7 @@ from typing import Union, Optional
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
+import matplotlib as mpl
 import numpy as np
 import pathlib
 from beamz9000.model import Label, Node, Support, Fixity, Joint, Beam, Load
@@ -39,7 +40,7 @@ class BeamPlotter:
             "DIM_TICKS": pathlib.Path(__file__).parent / self.style / "misc"  / "DIM_TICK.svg",
         }
         self.strata = {
-            "max_load_depth": self.beam.depth * 4/3,
+            "max_load_depth": self.beam.depth * 4/3 or self.beam.length / 10,
             "beam_top": self.beam.depth / 2,
             "beam_bottom": -self.beam.depth / 2,
             "gap": self.beam.depth * 0.05,
@@ -74,8 +75,7 @@ class BeamPlotter:
         """
         Returns a fig, ax of a new subplot for a beam
         """
-        beam_spans = self.beam.get_spans()
-        beam_length = sum(beam_spans)
+        beam_length = self.beam.length
         
         if not self.beam.depth:
             beam_x_ords = [0, beam_length]
@@ -125,9 +125,45 @@ class BeamPlotter:
         """
         Returns fig, ax with load graphics added
         """
+        prop_cycle = mpl.rc_params()['axes.prop_cycle']
+        colors = prop_cycle.by_key()['color']
         max_load_depth = self.strata['max_load_depth']
+        scaling_loads = max_load_magnitudes(self.beam.loads)
+        load_labels = list(sorted(set(load.label.text for load in self.beam.loads)))
+        load_colors = {label_text: colors[idx] for idx, label_text in enumerate(load_labels)}
+        y = self.strata['beam_top']
         for load in self.beam.loads:
-            pass
+            load_type = classify_load(load)
+            display_magnitude = get_scaled_magnitude(load, scaling_loads, max_load_depth)
+            if load_type == "POINT":
+                x = load.start_location
+                arrow_patch = graphics.arrow_at_coordinate(
+                    point=(x, y), 
+                    magnitude=display_magnitude, 
+                    angle=load.alpha,
+                    color=load_colors.get(load.label.text),
+                    **kwargs
+                )
+                ax.add_patch(arrow_patch)
+            elif load_type == "DISTRIBUTED":
+                try:
+                    start_magnitude, end_magnitude = display_magnitude
+                except TypeError:
+                    start_magnitude = end_magnitude = display_magnitude
+                polygon_patch, arrows = graphics.distributed_load_region(
+                    self.beam.length, 
+                    start_magnitude,
+                    load.start_location, 
+                    end_magnitude,
+                    load.end_location, 
+                    y, 
+                    load_colors.get(load.label.text), 
+                    **kwargs,
+                )
+                ax.add_patch(polygon_patch)
+                for arrow_patch in arrows:
+                    ax.add_patch(arrow_patch)
+            
         return fig, ax
 
 
@@ -219,16 +255,68 @@ def get_max_magnitude(loads: list[Load]) -> Load:
     return max_magnitude
 
 
-# def categorize_loads(loads: list[Load]) -> dict[str, list[Load]]:
-#     """
-#     Returns a dictionary representing the different categories of loads.
-#     This is required to properly scale different loads to the assigned 
-#     strata depth so that the largest magnitude load fulls the strata depth.
+def classify_load(load: Load) -> str:
+    """
+    Returns a str interpreting the type of load contained in load.
+    Load categories:
+    "POINT", "DISTRIBUTED", "POINT_MOMENT",
+    """
+    if load.moment:
+        return "POINT_MOMENT"
+    elif load.end_location is not None:
+        return "DISTRIBUTED"
+    else:
+        return "POINT"
 
-#     Load categories:
-#     "POINT", "DISTRIBUTED", "POINT_MOMENT", "POINT_TORQUE", "DISTRIBUTED TORQUE"
-#     """
-#     categorized_loads = {}
-#     for load in loads:
-#         if load.end_location and load.moment and :
-#             load_acc = categorized_loads.get("DISTRIBUTED")
+
+def max_load_magnitudes(loads: list[Load]) -> dict[str, float]:
+    """
+    Returns a dictionary representing the maximum magnitude for each 
+    load category in 'loads'.
+    The load categories are "POINT", "DISTRIBUTED", "POINT_MOMENT".
+    """
+    magnitudes = {"POINT": 0.0, "DISTRIBUTED": 0.0, "POINT_MOMENT": 0.0}
+    for load in loads:
+        load_type = classify_load(load)
+        comparison_magnitude = magnitudes.get(load_type)
+        scaling_magnitude = load.magnitude
+        if load.end_magnitude is not None:
+            if abs(load.end_magnitude) > abs(load.start_magnitude):
+                scaling_magnitude = abs(load.end_magnitude)
+        if comparison_magnitude < abs(scaling_magnitude):
+            magnitudes[load_type] = abs(scaling_magnitude)
+    return magnitudes
+
+
+def get_scaled_magnitude(load: Load, max_magnitudes: dict, max_depth: float) -> Union[float, tuple[tuple]]:
+    """
+    Returns magnitude of 'load' scaled according to the maximum magnitude of its
+    category in 'max_magnitudes' and according to 'max_depth' which is effectively
+    the maximum magnitude the load can have in figure space.
+    If 'load' is of category "DISTRIBUTED" then it will return a tuple of float
+    representing the start and end magnitude.
+    If 'load' is of category "POINT" or "POINT_MOMENT" then it will return a float
+    representing the magnitude.
+    """        
+    load_type = classify_load(load)
+    if load_type == "POINT":
+        scaling_load = abs(load.magnitude)
+        scaling_factor = abs(scaling_load / max_magnitudes[load_type])
+        load_depth = scaling_factor * max_depth
+        return load_depth
+    elif load_type == "DISTRIBUTED":
+        start_scaling_load = abs(load.magnitude)
+        end_scaling_load = abs(load.end_magnitude) if load.end_magnitude is not None else None
+        start_scaling_factor = abs(start_scaling_load / max_magnitudes[load_type])
+        if end_scaling_load is not None:
+            end_scaling_factor = abs(end_scaling_load / max_magnitudes[load_type])
+        start_load_depth = start_scaling_factor * max_depth
+        if end_scaling_load is not None:
+            end_load_depth = end_scaling_factor * max_depth
+        if end_scaling_load is not None:
+            return (start_load_depth, end_load_depth)
+        
+        return start_load_depth
+    elif load_type == "POINT_MOMENT":
+        load_depth = scaling_factor * max_depth
+        return load_depth

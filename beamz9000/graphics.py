@@ -1,7 +1,11 @@
+from typing import Any
+import math
 from matplotlib.path import Path
 import matplotlib.patches as patches
 import matplotlib.transforms as transforms
 import matplotlib.axes as axes
+import numpy as np
+
 
 
 def get_svg_size(ax: axes.Axes, path_patch: patches.PathPatch):
@@ -119,10 +123,72 @@ def get_anchor_point(path_patch: patches.PathPatch, location: str) -> tuple[floa
     return x, y
 
 
+def arrow_at_coordinate(point: tuple, magnitude: float, angle: float, color, **params: dict):
+    """
+    Returns ax with an arrow added to it that *points to* the coordinate ('x', 'y') with
+    an arrow containing arrow_params.
+    """
+    pt_x, pt_y = point
+    v_x, v_y = math.cos(math.radians(90 - angle)), math.sin(math.radians(90 - angle))
+    dx = -v_x * magnitude
+    dy = -v_y * magnitude
+    x = pt_x - dx
+    y = pt_y - dy
+    params['edgecolor'] = color
+    params['facecolor'] = color
+    arrow = patches.FancyArrow(
+        x=x, 
+        y=y, 
+        dx=dx, 
+        dy=dy, 
+        length_includes_head=True,
+        head_width=magnitude / 10,
+        head_length=magnitude / 6,
+        **params)
+    return arrow
 
 
+def distributed_load_region(
+    beam_length: float,
+    start_magnitude: float, 
+    start_loc: tuple[float], 
+    end_magnitude: float, 
+    end_loc: tuple[float],
+    top_of_beam: float,
+    color: Any,
+    **params: dict,
+    ):
+    """
+    Returns a distributed load polygon patch and arrow patches
+    """
+    N_ARROWS = 7
+    region = end_loc - start_loc
+    n_arrows = N_ARROWS
+    if region / beam_length < 0.50:
+        n_arrows = 5
+    elif region / beam_length < 0.20:
+        n_arrows = 3
+    elif region / beam_length < 0.10:
+        n_arrows = 2
 
+    xy = np.array(
+        [
+            [start_loc, top_of_beam],
+            [start_loc, start_magnitude],
+            [end_loc, end_magnitude],
+            [end_loc, top_of_beam]
+        ]
+    )
+    params = {"edgecolor": color, "facecolor": color, "alpha": 0.5}
+    distributed_patch = patches.Polygon(xy=xy, closed=True, **params)
+    arrows = []
+    x_interval = region / (n_arrows - 1)
+    for arrow_idx in range(n_arrows):
+        x_coord = arrow_idx * x_interval + start_loc
+        arrow_magnitude = (end_magnitude - start_magnitude) / region * (x_coord - start_magnitude) + start_magnitude
+        arrow = arrow_at_coordinate(point=(x_coord, top_of_beam), magnitude=arrow_magnitude, angle=0, color=color, **params)
+        arrows.append(arrow)
 
-
+    return distributed_patch, arrows
 
 

@@ -154,14 +154,14 @@ class Load:
         -ve values: point in negative x,y-axis ("down", "left") and rotate clock-wise.
     location: Node - The location on the beam of the load. If the load is of type "linear", then location
         represents the starting location of the linear load.
-    end_magnitude: optional, None - If provided, the load will be interpreted as a trapezoidal
+    end_location: optional, None - If provided, the load will be interpreted as a trapezoidal
         load starting from 'location' and ending at the end of the beam with a magnitude of 'end_magnitude'.
         If moment=True, then end_magnitude is ignored.
         If torque=True, then the load will be a "trapezoidal" distributed torque load ending at the
         end of the beam.
         +ve values: point in positive x,y-axis ("up", "right") and rotate clock-wise.
         -ve values: point in negative x,y-axis ("down", "left") and rotate anti-clock-wise.
-    end_location: optional, None - For a distributed load or a distributed torque, represents the location
+    end_magnitude: optional, None - For a distributed load or a distributed torque, represents the location
         where the load ends. If end_location is provided, then end_magnitude must also be supplied.
     alpha: float, 0.0 - Applies only to point loads. Describes the angle at which the load is to be applied. 
         Measured in degrees deviation from vertical. Default value of 0.0 refers to a vertically applied load
@@ -177,7 +177,7 @@ class Load:
     L01 = Load(45, N00, moment=True) # Point moment @ N00
     L02 = Load(45, N00, 5.2) # UDL from starting from N00 and ending at 5.2
     L03 = Load(45, N00, 5.2, 100) # Trapezoidal load: 45 @ N00 (start) -> 100 @ 5.2 (end)
-    L04 = Load(45, N00, 45) # UDL with magnitude of 45 over the beam length
+    L04 = Load(45, N00, 6) # UDL with magnitude of 45 over the beam length (of 6)
     """
     magnitude: Number
     start_location: Union[Node, str, Number]
@@ -237,12 +237,12 @@ class Beam:
         depth=0.3,
     )
     """
-    nodes: list[Union[Node, Number]]
+    nodes: list[Union[Node, Number, str]]
     supports: Optional[list[Support]] = None
     loads: Optional[list[Load]] = None
     joints: Optional[list[Joint]] = None
     depth: Optional[Union[Number, list[Number]]] = None
-    dimensions: Optional[list[Union[Node, str]]] = None
+    dimensions: Optional[list[Union[Node, Number, str]]] = None
 
     def __post_init__(self):
         new_nodes = []
@@ -266,7 +266,9 @@ class Beam:
 
         processed_dimensions = []
         for loc in self.dimensions:
-            if isinstance(loc, NUMBER):
+            if isinstance(loc, Node):
+                processed_dimensions.append(loc)
+            elif isinstance(loc, NUMBER):
                 node = Node(loc)
                 processed_dimensions.append(node)
             elif isinstance(loc, str):
@@ -283,7 +285,6 @@ class Beam:
         return _alternate_dataclass_repr(self)    
 
          
-
     def get_spans(self):
         """
         Returns the list of spans that exist on the beam as defined by
@@ -299,6 +300,12 @@ class Beam:
                 spans.append(current_span)
                 prev_loc = node.x
         return spans
+
+    @property
+    def length(self):
+        beam_spans = self.get_spans()
+        beam_length = sum(beam_spans)
+        return beam_length
 
 
 
