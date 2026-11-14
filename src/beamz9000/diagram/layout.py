@@ -1,0 +1,74 @@
+"""
+Layout settings for beam diagrams.
+
+Sizes are fractions of the beam length, so a 3 m cantilever and an 18 m
+continuous beam come out with the same proportions whatever the units. Stroke
+widths are in points, like every renderer's line weights.
+"""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict, Field
+
+# Okabe-Ito: a colour-blind-safe qualitative palette.
+OKABE_ITO = [
+    "#0072B2",  # blue
+    "#D55E00",  # vermillion
+    "#009E73",  # bluish green
+    "#CC79A7",  # reddish purple
+    "#E69F00",  # orange
+    "#56B4E9",  # sky blue
+    "#F0E442",  # yellow
+    "#000000",  # black
+]
+
+
+class Layout(BaseModel):
+    """Proportions and styles of a beam diagram. All lengths are × beam length."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    # Text
+    font_family: str = "DejaVu Sans"
+    font_size: float = 0.018
+    label_gap: float = Field(0.25, description="Gap between a glyph and its label, in em.")
+
+    # Beam and supports
+    glyph_width: float = 0.04
+    beam_stroke_width: float = 4.0
+    support_fill: str = "#d9d9d9"
+    ink: str = "black"
+    stroke_width: float = 1.0
+
+    # Loads
+    point_height: float = Field(0.09, description="Arrow length of the largest point load.")
+    line_height: float = Field(0.09, description="Region height of the largest line load.")
+    min_fraction: float = Field(0.2, description="Smallest drawn size, as a fraction of the largest.")
+    moment_radius: float = 0.028
+    head_length: float = 0.014
+    head_width: float = 0.01
+    arrow_spacing: float = 0.05
+    load_fill_opacity: float = 0.3
+    load_stroke_width: float = 1.2
+    area_load_hatch: str = "//"
+    beam_clearance: float = Field(0.025, description="Gap between the beam and the first band.")
+    band_gap: float = Field(0.03, description="Gap between bands.")
+    row_gap: float = Field(0.015, description="Gap between rows within a band.")
+    item_gap: float = Field(0.01, description="Smallest horizontal gap between items in a row.")
+    palette: list[str] = Field(default_factory=lambda: list(OKABE_ITO))
+
+    # Dimensions
+    dimension_gap: float = Field(0.04, description="Gap below the supports to the first dimension line.")
+    dimension_spacing: float = Field(0.08, description="Distance between chained and overall lines.")
+    tick_size: float = 0.012
+    dimension_stroke_width: float = 0.8
+
+    # Legend
+    legend: bool = True
+    legend_gap: float = Field(0.05, description="Gap between the drawing and the legend.")
+    swatch_size: float = 0.022
+    legend_row: float = Field(1.8, description="Legend row pitch, in em.")
+    legend_title: str | None = Field(None, description="Title; chosen from the keys if None.")
+
+    def color(self, index: int) -> str:
+        return self.palette[index % len(self.palette)]
