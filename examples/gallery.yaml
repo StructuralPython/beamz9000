@@ -1,0 +1,37 @@
+# Common beams, one per diagram in the documentation gallery.
+_environment: structural
+
+simple_udl:
+  spans: [6 m]
+  node_labels: auto
+  loads:
+    - dist: {w: 4.5 kN/m, case: D}
+    - dist: {w: 6 kN/m, case: L}
+
+propped_cantilever:
+  spans: [5 m]
+  supports: [fixed, roller]
+  node_labels: auto
+  loads:
+    - point: {p: 25 kN, x: 2 m, case: L}
+    - dist: {w: 3 kN/m, case: D}
+
+overhang:
+  spans: [5 m, 1.5 m]
+  cantilever: right
+  loads:
+    - dist: {w: 2 kN/m, case: D}
+    - point: {p: 12 kN, loc: L, case: L}
+    - point: {p: 8 kN, x: 2.5 m, case: S}
+    - moment: {m: 6 kN*m, loc: L, case: D}
+
+floor_beam:
+  spans: [4.2 m, 4.8 m, 3.6 m]
+  depth: 400 mm
+  node_labels: auto
+  loads:
+    - pressure: {q: office, trib: 3 m}
+    - pressure: {q: 1.2 kPa, trib_width1: 3 m, trib_width2: 1 m, span_loc1: [2, 0 m], case: SDL}
+    - point: {p: 18 kN, span_loc: [1, 2.4 m], case: L}
+  occupancies:
+    office: {D: 2.0 kPa, L: 2.4 kPa}

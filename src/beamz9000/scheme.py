@@ -3,7 +3,7 @@ Pydantic models for the beam scheme YAML format.
 
 A scheme file maps beam ids to beam definitions. Values may be plain numbers
 (any consistent unit system) or, when the file names a forallpeople environment
-with `_environment: structural` (for example), quantity strs like "4500 mm".
+with `_environment: structural` (for example), quantity strs like "4500 mm"::
 
     _environment: structural
     B1:
@@ -16,7 +16,7 @@ with `_environment: structural` (for example), quantity strs like "4500 mm".
 Conventions
 -----------
 - Locations are measured from the left end of the beam.
-- A negative `loc` is measured back from the right end (L - |loc|), and `L`
+- A negative `loc` is measured back from the right end, and `L`
   means the right end. A negative span offset is measured back from the end of
   that span, and `S` means the end of the span.
 - `span_loc: [i, offset]` locates a point within span i (0-based). A bare
@@ -557,7 +557,7 @@ class Beam(_Model):
 
     @property
     def labels(self) -> list[Optional[str]]:
-        """The label at each node: A, B, C, ... with `node_labels: auto`."""
+        """The label at each node, or None. Auto labels run A, B, C and so on."""
         n = len(self.spans) + 1
         if self.node_labels == "auto":
             return [_letters(i) for i in range(n)]

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke-linejoin="round">
+  <style>.ink{fill:#111;stroke:#111}@media (prefers-color-scheme:dark){.ink{fill:#eee;stroke:#eee}}</style>
+  <path d="M32 6v16" stroke="#0072B2" stroke-width="4" stroke-linecap="round"/>
+  <path d="M25 18l7 10 7-10z" fill="#0072B2" stroke="#0072B2" stroke-width="2"/>
+  <rect class="ink" x="4" y="31" width="56" height="7" rx="1.5" stroke-width="0"/>
+  <path d="M10 38l-6 11h12z" fill="#D55E00" stroke="#D55E00" stroke-width="2"/>
+  <circle cx="54" cy="44" r="5.5" fill="#D55E00"/>
+  <path class="ink" d="M2 54h60" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -2,6 +2,8 @@
 
 Beam free-body diagrams from a simple YAML scheme, drawn through shapely geometry.
 
+**Documentation:** https://beamz9000.structuralpython.com
+
 ```python
 import beamz9000 as bz
 
@@ -168,4 +170,9 @@ after it starts`. Other checks:
 ```
 uv sync
 uv run pytest
+uv run --group docs sphinx-build -b html docs docs/_build/html   # docs
 ```
+
+The docs are built and deployed to bunny.net by `.github/workflows/docs.yml`
+on every push to `main`. Pull requests build them (with warnings as errors)
+without deploying.
