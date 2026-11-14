@@ -1,0 +1,51 @@
+# A filled-in version of the starter beam scheme ("Beam scheme.yaml").
+# Remove `_environment` to use plain numbers; with it, quantity strs carry units.
+_environment: structural
+
+B1:
+  spans: [4500 mm, 2500 mm]
+  cantilever: right
+  e: 200 GPa
+  i: 300e6 mm**4
+  loads:
+    - point:
+        p: 15 kN
+        span_loc: [1, 1250 mm]  # 5750 mm global
+        case: L
+    - point:
+        mag: 10 kN
+        loc: -500 mm  # 500 mm back from the right end
+    - dist:
+        mag: 2.5 kN/m  # uniform over the whole beam
+        case: D
+    - dist:
+        mag1: 1 kN/m
+        mag2: 4 kN/m
+        x1: 1000 mm
+        span_loc2: [0, S]  # end of span 0
+        case: L
+    - pressure:
+        mag: residential  # an occupancy: one pressure load per case in it
+        trib_width1: 3 m
+        trib_width2: 1.5 m
+        span_loc1: [1, 0 mm]
+        loc2: L
+    - moment:
+        mag: 5 kN*m
+        loc: 0 mm
+  occupancies:
+    - residential:
+        D: 1.5 kPa
+        L: 1.9 kPa
+  load_combos:
+    - ULS1:
+        name: D
+        factor: 1.4
+    - ULS2:
+        D: 1.25
+        L: 1.5
+  results:
+    diagrams:
+      - moment
+      - shear
+      - deflection

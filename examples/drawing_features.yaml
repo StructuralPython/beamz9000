@@ -1,0 +1,27 @@
+# Drawing features: beam depth, spring supports, angled point loads, node labels.
+_environment: structural
+
+B2:
+  spans: [3000 mm, 5000 mm, 2000 mm]
+  depth: 450 mm                     # drawn to scale as a rectangle
+  node_labels: auto                 # A, B, C, D
+  supports:
+    - rotational_spring: 8000 kN*m  # a pin with rotational stiffness
+    - roller
+    - spring: 12 kN/mm              # vertical spring with stiffness
+    - free
+  loads:
+    - point: {p: 20 kN, span_loc: [0, 1500 mm], angle: 30, case: D}
+    - point: {p: 12 kN, span_loc: [1, 2000 mm], angle: -45, case: L}
+    - point: {p: -8 kN, span_loc: [1, 4000 mm], case: W}   # upward (wind uplift)
+    - dist: {mag: 3 kN/m, case: D}
+    - point: {p: 6 kN, loc: L, case: L}
+
+B3:
+  spans: [4000 mm]
+  cantilever: right                 # fixed at the left end
+  depth: 600 mm
+  node_labels: [A, B]
+  loads:
+    - dist: {mag1: 0 kN/m, mag2: 8 kN/m, case: D}
+    - point: {p: 10 kN, loc: L, angle: 60}
