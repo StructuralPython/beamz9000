@@ -22,12 +22,9 @@ or with the beam written inline (quantities need no `_environment`; the
               - dist: {w: 2.5 kN/m, case: D}
 
 beamz9000 provides the block through the `ymprint.blocks` entry point, so
-`ym convert report.yml` renders it with a ymprint that reads installed blocks.
-`register(app)` adds it to an application explicitly, and
-`beamz9000.ymprint.app` is a ymprint application with `_beam` already added,
-for older ymprint releases::
-
-    python -m beamz9000.ymprint convert report.yml
+`ym convert report.yml` renders it (ymprint 0.12 and later). `register(app)`
+adds it to an application explicitly, for one built with `plugin_blocks=False`
+or under another code.
 
 Requires the `ymprint` extra: `uv add "beamz9000[ymprint]"`.
 """

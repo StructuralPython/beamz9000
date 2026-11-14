@@ -23,11 +23,11 @@ reportlab = [
     "reportlab>=4.2",
 ]
 ymprint = [
-    "ymprint>=0.11.3 ; python_full_version >= '3.14'",
+    "ymprint>=0.12.0 ; python_full_version >= '3.14'",
 ]
 
 # The _beam block for ymprint's `ym` command and every other ymprint application
-# (needs a ymprint that reads the `ymprint.blocks` entry-point group).
+# (ymprint 0.12 and later read the `ymprint.blocks` entry-point group).
 [project.entry-points."ymprint.blocks"]
 _beam = "beamz9000.ymprint:beam_block"
 
@@ -40,7 +40,7 @@ dev = [
     "ipykernel>=7.1.0",
     "pytest>=8.3",
     "reportlab>=4.2",
-    "ymprint>=0.11.3 ; python_full_version >= '3.14'",
+    "ymprint>=0.12.0 ; python_full_version >= '3.14'",
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
