@@ -13,12 +13,21 @@ ymprint needs Python 3.14 or later.
 
 ## Use it
 
-beamz9000 comes with a ymprint application that has the `_beam` block
-added. It has the same commands as `ym`:
+beamz9000 registers `_beam` as an installed block (the `ymprint.blocks`
+entry point), so `ym` renders it once both are installed:
+
+```bash
+ym convert report.yml
+ym live report.yml
+```
+
+This needs a ymprint release that reads installed blocks
+([ymprint#65](https://github.com/StructuralPython/ymprint/pull/65)). With an
+older ymprint, use the ymprint application that comes with beamz9000, which
+has the same commands:
 
 ```bash
 python -m beamz9000.ymprint convert report.yml
-python -m beamz9000.ymprint live report.yml
 ```
 
 In the report, point the block at a scheme file:
@@ -72,8 +81,9 @@ Mistakes are reported as ymprint block errors that name the block, e.g.
 
 ## In your own application
 
-Add the block to your own ymprint application with
-{func}`~beamz9000.ymprint.register`:
+Your own ymprint applications pick up `_beam` as an installed block too,
+unless they're created with `plugin_blocks=False`. To add it explicitly, or
+under another code, use {func}`~beamz9000.ymprint.register`:
 
 ```python
 from ymprint import Ymprint

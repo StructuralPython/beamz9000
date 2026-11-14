@@ -21,8 +21,11 @@ or with the beam written inline (quantities need no `_environment`; the
             loads:
               - dist: {w: 2.5 kN/m, case: D}
 
-Add the block to your own ymprint application with `register(app)`, or use
-`beamz9000.ymprint.app`, a ymprint application with `_beam` already added::
+beamz9000 provides the block through the `ymprint.blocks` entry point, so
+`ym convert report.yml` renders it with a ymprint that reads installed blocks.
+`register(app)` adds it to an application explicitly, and
+`beamz9000.ymprint.app` is a ymprint application with `_beam` already added,
+for older ymprint releases::
 
     python -m beamz9000.ymprint convert report.yml
 

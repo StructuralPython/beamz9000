@@ -162,8 +162,9 @@ length, and symbols scale with it.
 
 `uv add "beamz9000[ymprint]"` adds a `_beam` block for
 [ymprint](https://ymprint.structuralpython.com) reports
-(`python -m beamz9000.ymprint convert report.yml`, or `register(app)` in your
-own application). `beamz9000.render.reportlab.ReportLabRenderer` draws a
+(`ym convert report.yml` with a ymprint that reads installed blocks, else
+`python -m beamz9000.ymprint convert report.yml`, or `register(app)` in your own
+application). `beamz9000.render.reportlab.ReportLabRenderer` draws a
 diagram into any ReportLab document as vector graphics with searchable text.
 
 ### Occupancies, combinations, results

@@ -151,3 +151,13 @@ def test_to_points():
     assert to_points("1 in") == 72
     assert to_points("25.4 mm") == pytest.approx(72)
     assert to_points("180") == 180
+
+
+def test_block_is_published_as_an_entry_point():
+    from importlib.metadata import entry_points
+
+    from beamz9000.ymprint import beam_block
+
+    (ep,) = [ep for ep in entry_points(group="ymprint.blocks") if ep.dist and ep.dist.name == "beamz9000"]
+    assert ep.name == "_beam"
+    assert ep.load() is beam_block
