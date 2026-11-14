@@ -21,14 +21,8 @@ ym convert report.yml
 ym live report.yml
 ```
 
-This needs a ymprint release that reads installed blocks
-([ymprint#65](https://github.com/StructuralPython/ymprint/pull/65)). With an
-older ymprint, use the ymprint application that comes with beamz9000, which
-has the same commands:
-
-```bash
-python -m beamz9000.ymprint convert report.yml
-```
+ymprint 0.12 and later read blocks from installed packages, so `ym` renders
+`_beam` with nothing to register. The extra requires ymprint 0.12 or later.
 
 In the report, point the block at a scheme file:
 
