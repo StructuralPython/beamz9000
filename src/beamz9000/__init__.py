@@ -32,7 +32,8 @@ def draw(obj, path: Union[str, pathlib.Path], layout: Optional[Layout] = None,
     ...) the MatplotlibRenderer, unless 'renderer' is given.
 
     A renderer with a `height` sets the output's exact size, and the diagram
-    is arranged to fill it (see `beam_diagram`'s 'aspect').
+    is arranged to fill it (see `beam_diagram`'s 'aspect'). With
+    `layout.font_size_pt`, text is that many points high in the output.
     """
     path = pathlib.Path(path)
     if renderer is None:
@@ -40,7 +41,8 @@ def draw(obj, path: Union[str, pathlib.Path], layout: Optional[Layout] = None,
     if isinstance(obj, Group):
         diagram = obj
     else:
-        diagram = beam_diagram(obj, layout, beam_id, aspect=renderer.aspect, margin=renderer.margin)
+        diagram = beam_diagram(obj, layout, beam_id, aspect=renderer.aspect, margin=renderer.margin,
+                               width=renderer.width_pt)
     return renderer.save(diagram, path)
 
 
