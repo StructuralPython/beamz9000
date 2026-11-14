@@ -51,6 +51,8 @@ B1:
   cantilever: right          # left | right | both
   e: 200 GPa                 # optional; or `ei:`
   i: 300e6 mm**4
+  depth: 450 mm              # optional; drawn as a rectangle to scale
+  node_labels: auto          # optional; A, B, C ... or a list like [A, B, null]
   supports: [pin, roller, free]   # optional override (see below)
   loads:
     - point:    {p: 15 kN, span_loc: [1, 1250 mm], case: L}
@@ -88,7 +90,7 @@ out the end means the right end.
 
 | Type | Magnitude | Notes |
 |---|---|---|
-| `point` | `mag` (aliases `magnitude`, `p`) | Positive acts downward. |
+| `point` | `mag` (aliases `magnitude`, `p`) | Positive acts downward. `angle` (alias `alpha`), in degrees from vertical between −90 and 90, tilts the arrow: positive turns its tail counter-clockwise about its tip. |
 | `moment` | `mag` (aliases `magnitude`, `m`) | Positive is counter-clockwise. |
 | `dist` | `mag` (aliases `magnitude`, `w`) for a UDL, or `mag1` → `mag2` | Linear between the two. |
 | `pressure` | `mag` (aliases `magnitude`, `q`, `occupancy`) × `trib_width1` → `trib_width2` | `trib_width`/`trib` gives a uniform width. `mag` may name an occupancy: the load then stands for one pressure per case in it, or only `case` if given. |
@@ -101,10 +103,39 @@ written flat, as `{type: point, p: 15, loc: 2000}`.
 
 Without `supports`, the first supported node is pinned and the rest are
 rollers, with cantilevered ends left free. A single span with one cantilevered
-end is fixed at the other end. `supports` overrides this, either with one type
-per node (`pin`, `roller`, `fixed`, `free`) or as `{node index: type}` for just
-the nodes that differ. If `cantilever` is also given, `supports` must leave
-that end free.
+end is fixed at the other end. `supports` overrides this, either with one
+support per node or as `{node index: support}` for just the nodes that differ.
+If `cantilever` is also given, `supports` must leave that end free.
+
+| Type | Aliases | Drawn as |
+|---|---|---|
+| `pin` | `pinned`, `hinge` | A triangle on the ground |
+| `roller` | | A circle on the ground |
+| `fixed` | `fix` | A block. At a beam end it becomes a wall covering the beam's depth. |
+| `spring` | `v_spring`, `vertical_spring` | A zigzag spring to the ground |
+| `rotational_spring` | `m_spring`, `rot_spring` | A pin with a spiral |
+| `free` | `none` | Nothing |
+
+A spring can take a stiffness, which is drawn beside it. Write it as
+`{spring: 12 kN/mm}` or `{type: spring, k: 12 kN/mm}`. A `spring` takes a force
+per length, and a `rotational_spring` a moment per radian (written as a moment,
+e.g. `8000 kN*m`).
+
+```yaml
+supports:
+  - rotational_spring: 8000 kN*m
+  - roller
+  - spring: 12 kN/mm
+  - free
+```
+
+### Drawing
+
+- Load labels show the magnitude without a sign, because the arrow shows the
+  direction. The zero end of a triangular load has no label.
+- `node_labels` are drawn in bold on one line under the lowest support.
+- See `examples/drawing_features.yaml` for depth, springs, angled loads and
+  node labels together.
 
 ### Occupancies, combinations, results
 
