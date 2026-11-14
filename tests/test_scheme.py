@@ -131,3 +131,35 @@ def test_combo_forms():
 def test_yaml_text_and_placeholders():
     s = load_scheme("B2:\n  spans: [3000]\n  e: ...\n  i: ...\n  supports:\n")
     assert s["B2"].stiffness is None
+
+
+def test_quantities_keep_their_written_units():
+    from beamz9000 import units
+    from beamz9000.spec import from_scheme
+
+    scheme = load_scheme("""
+_environment: structural
+B:
+  spans: [4.5 m, 2500 mm]
+  supports: [pin, {spring: 12 kN/mm}, roller]
+  loads:
+    - point: {p: -8 kN, loc: 1 m}
+    - moment: {m: 5 kN*m, loc: 0 mm}
+""")
+    beam = scheme["B"]
+    assert isinstance(beam.spans[0], units.Quantity)
+    assert units.si(beam.spans[0]) == 4.5
+    spec = from_scheme(beam)
+    assert spec.span_labels == ["4.5 m", "2500 mm"]
+    assert spec.support_labels[1] == "12 kN/mm"
+    assert [l.label1 for l in spec.loads] == ["8 kN", "5 kN·m"]
+    # Computed values have no source and fall back to forallpeople's units.
+    assert spec.length_label == "7 m"
+
+
+def test_typeset_units():
+    from beamz9000.units import _typeset
+
+    assert _typeset("300e6 mm**4") == "300e6 mm⁴"
+    assert _typeset("5 kN * m") == "5 kN·m"
+    assert _typeset("2 m**-1") == "2 m⁻¹"

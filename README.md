@@ -131,6 +131,10 @@ supports:
 
 ### Drawing
 
+- Labels show quantities as they were written: `12 kN/mm` stays "12 kN/mm"
+  rather than forallpeople's "12 MN/m". `*` is drawn as a middle dot and `**n`
+  as a superscript (`5 kN*m` → "5 kN·m"). Computed values, such as the overall
+  length, use forallpeople's units.
 - Load labels show the magnitude without a sign, because the arrow shows the
   direction. The zero end of a triangular load has no label.
 - `node_labels` are drawn in bold on one line under the lowest support.

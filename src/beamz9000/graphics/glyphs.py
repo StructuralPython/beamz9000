@@ -177,11 +177,6 @@ def support(kind: SupportKind, gw: float, n_ticks: int = 4,
     return _BODIES[kind](gw), MultiLineString(lines)
 
 
-def support_depth(gw: float) -> float:
-    """How far a support glyph reaches below the origin, ticks included."""
-    return support_height(gw) + tick_depth(gw)
-
-
 # --- Arrows --------------------------------------------------------------------------
 
 
@@ -267,24 +262,6 @@ def line_load_arrows(x1: float, x2: float, h1: float, h2: float, spacing: float,
         if not head.is_empty:
             heads.append(head)
     return MultiLineString(shafts), MultiPolygon(heads)
-
-
-def hatch_lines(region: Polygon, spacing: float, angle: float = 45.0) -> MultiLineString:
-    """
-    Returns parallel lines at 'angle' degrees, 'spacing' apart, clipped to
-    'region': hatching as geometry, for media without hatch patterns.
-    """
-    minx, miny, maxx, maxy = region.bounds
-    cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
-    r = math.hypot(maxx - minx, maxy - miny) / 2 + spacing
-    lines = [LineString([(cx - r, cy + o), (cx + r, cy + o)]) for o in np.arange(-r, r + spacing, spacing)]
-    field = affinity.rotate(MultiLineString(lines), angle, origin=(cx, cy))
-    clipped = field.intersection(region)
-    parts = [g for g in getattr(clipped, "geoms", [clipped]) if isinstance(g, LineString) and not g.is_empty]
-    return MultiLineString(parts)
-
-
-# --- Dimensions ------------------------------------------------------------------------
 
 
 def dimension_tick(x: float, y: float, size: float) -> MultiLineString:

@@ -22,7 +22,6 @@ import pathlib
 from typing import Optional, Union
 from xml.sax.saxutils import escape, quoteattr
 
-import shapely
 from matplotlib.colors import to_hex
 from pydantic import BaseModel, ConfigDict, Field
 from shapely.geometry.base import BaseGeometry

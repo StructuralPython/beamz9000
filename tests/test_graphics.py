@@ -6,7 +6,16 @@ import shapely
 from beamz9000.graphics import glyphs as g
 from beamz9000.graphics import text as tx
 from beamz9000.graphics.elements import (
-    Group, Shape, Text, flatten, group, mirror_x, restyle, rotate, scale, translate,
+    Group,
+    Shape,
+    Text,
+    flatten,
+    group,
+    mirror_x,
+    restyle,
+    rotate,
+    scale,
+    translate,
 )
 
 
@@ -50,13 +59,6 @@ def test_line_load_arrows():
     assert all(h.bounds[1] == pytest.approx(0) for h in heads.geoms)
     _, up = g.line_load_arrows(0, 3, 0.5, 1.0, 0.5, 0.14, 0.1, upward=True)
     assert up.geoms[0].bounds[3] == pytest.approx(0.5)
-
-
-def test_hatch_lines_clip_to_region():
-    region = g.trapezoid(0, 3, 1, 0.5)
-    lines = g.hatch_lines(region, 0.2)
-    assert len(lines.geoms) > 5
-    assert region.buffer(1e-9).contains(lines)
 
 
 def test_text_measure_is_shaped():

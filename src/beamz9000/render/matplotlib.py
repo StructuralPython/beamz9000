@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from shapely.geometry.base import BaseGeometry
 
 from beamz9000.graphics import text as shaping
-from beamz9000.graphics.elements import Element, Group, Shape, Text, flatten
+from beamz9000.graphics.elements import Element, Shape, Text, flatten
 
 _DASHES = {"solid": "solid", "dashed": (0, (6, 4)), "dotted": (0, (1, 3)), "dashdot": (0, (6, 3, 1, 3))}
 

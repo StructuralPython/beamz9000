@@ -500,10 +500,6 @@ class Beam(_Model):
     # --- Derived geometry ---
 
     @property
-    def uses_units(self) -> bool:
-        return units.is_quantity(self.spans[0])
-
-    @property
     def length(self) -> Value:
         total = 0
         for span in self.spans:
@@ -568,15 +564,6 @@ class Beam(_Model):
         if self.node_labels is None:
             return [None] * n
         return list(self.node_labels)
-
-    @property
-    def cases(self) -> list[str]:
-        """Load cases in order of first appearance, occupancy cases included."""
-        seen: dict[str, None] = {}
-        for load in self.resolved_loads:
-            if load.case is not None:
-                seen.setdefault(load.case, None)
-        return list(seen)
 
     # --- Locations ---
 
@@ -702,7 +689,7 @@ def parse_scheme(data: dict) -> Scheme:
         import forallpeople as fp
 
         fp.environment(env, top_level=False)
-        data = fp.parse_tree(data, strict=True)
+        data = units.keep_sources(data, fp.parse_tree(data, strict=True))
     return Scheme(environment=env, beams=data)
 
 

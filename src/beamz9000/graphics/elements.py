@@ -189,9 +189,6 @@ class Group(Element):
         return self.model_copy(update={"children": [*self.children, *extra]})
 
 
-AnyElement = Union[Shape, Text, Group]
-
-
 def _empty(el: Element) -> bool:
     if isinstance(el, Shape):
         return el.is_empty
@@ -320,11 +317,3 @@ def restyle(el: Element, **style) -> Element:
         return type(e).model_validate(data)  # Validates the new style values.
 
     return apply(el)
-
-
-def unite(*geoms: BaseGeometry) -> BaseGeometry:
-    """Returns the union of the non-empty geometries in 'geoms'."""
-    parts = [g for g in geoms if g is not None and not g.is_empty]
-    if not parts:
-        return shapely.GeometryCollection()
-    return shapely.union_all(parts)

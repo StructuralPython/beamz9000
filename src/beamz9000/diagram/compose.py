@@ -23,7 +23,7 @@ from __future__ import annotations
 import math
 import pathlib
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional
 
 from beamz9000.diagram.layout import Layout
 from beamz9000.graphics import glyphs
@@ -256,7 +256,6 @@ def load_bands(spec: BeamSpec, layout: Layout, base: float = 0.0) -> Group:
     band packs its loads into as many rows as needed to avoid overlaps.
     """
     scale = _scale_for(spec, layout)
-    L = spec.length
     colors = {k.name: layout.color(i) for i, k in enumerate(spec.keys)}
     y = base + scale.size(layout.beam_clearance)
     bands = []
@@ -323,9 +322,6 @@ def legend(spec: BeamSpec, layout: Layout, drawing: Bounds) -> Group:
 
 
 # --- Whole diagram -------------------------------------------------------------------
-
-
-Drawable = Union[BeamSpec, "Beam", str, pathlib.Path]  # noqa: F821
 
 
 def as_spec(obj, beam_id: Optional[str] = None) -> BeamSpec:

@@ -119,16 +119,6 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
     )
 
 
-def _mag_label(value) -> str:
-    """
-    A magnitude label: unsigned, since the glyph shows the direction, and
-    empty for zero (e.g. the start of a triangular load).
-    """
-    if units.si(value) == 0:
-        return ""
-    return units.label(abs(value))
-
-
 def _stiffness_label(support) -> Optional[str]:
     if support.k is None:
         return None
@@ -141,14 +131,14 @@ def _stiffness_label(support) -> Optional[str]:
 def _spec_load(r, key: str) -> SpecLoad:
     common = dict(kind=r.kind, key=key, x1=units.si(r.x1), mag1=units.si(r.mag1))
     if r.kind != "line":
-        return SpecLoad(**common, label1=r.label or _mag_label(r.mag1), angle=r.angle)
+        return SpecLoad(**common, label1=r.label or units.magnitude_label(r.mag1), angle=r.angle)
     mag2 = units.si(r.mag2)
     if r.pressure is not None:
-        labels = (r.label or _mag_label(r.pressure), None)
+        labels = (r.label or units.magnitude_label(r.pressure), None)
     elif r.label is not None or units.si(r.mag1) == mag2:
-        labels = (r.label or _mag_label(r.mag1), None)
+        labels = (r.label or units.magnitude_label(r.mag1), None)
     else:
-        labels = (_mag_label(r.mag1), _mag_label(r.mag2))
+        labels = (units.magnitude_label(r.mag1), units.magnitude_label(r.mag2))
     return SpecLoad(
         **common, x2=units.si(r.x2), mag2=mag2, label1=labels[0], label2=labels[1],
         area_load=r.pressure is not None,
@@ -165,5 +155,5 @@ def _combined_occupancy(occupancy: str, parts) -> SpecLoad:
     return SpecLoad(
         kind="line", key=occupancy, x1=units.si(first.x1), x2=units.si(first.x2),
         mag1=units.si(mag1), mag2=units.si(mag2),
-        label1=first.label or _mag_label(total_q), area_load=True,
+        label1=first.label or units.magnitude_label(total_q), area_load=True,
     )

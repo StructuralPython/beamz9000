@@ -143,7 +143,7 @@ def test_springs_parse_in_every_form(features):
     b2 = features["B2"]
     assert b2.node_supports == ["rotational_spring", "roller", "spring", "free"]
     spec = from_scheme(b2)
-    assert spec.support_labels == ["8 MN·m/rad", None, "12 MN/m", None]
+    assert spec.support_labels == ["8000 kN·m/rad", None, "12 kN/mm", None]
     b = bz.Beam.model_validate({"spans": [4, 4], "supports": ["pinned", {"type": "v_spring", "k": 5}, "m_spring"]})
     assert b.node_supports == ["pin", "spring", "rotational_spring"]
 
