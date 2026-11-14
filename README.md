@@ -155,6 +155,17 @@ bz.draw("beams.yaml", "B1.png", renderer=bz.MatplotlibRenderer(width=6.5, height
 diagram = bz.beam_diagram("beams.yaml", aspect=6.5 / 2.5)   # without a renderer
 ```
 
+With `Layout(font_size_pt=8)`, text is 8 pt in the output whatever the beam's
+length, and symbols scale with it.
+
+### ymprint block and ReportLab
+
+`uv add "beamz9000[ymprint]"` adds a `_beam` block for
+[ymprint](https://ymprint.structuralpython.com) reports
+(`python -m beamz9000.ymprint convert report.yml`, or `register(app)` in your
+own application). `beamz9000.render.reportlab.ReportLabRenderer` draws a
+diagram into any ReportLab document as vector graphics with searchable text.
+
 ### Occupancies, combinations, results
 
 - `occupancies` and `load_combos` accept a list of `- name: {...}` items or a

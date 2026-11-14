@@ -36,9 +36,13 @@ bz.draw("beams.yaml", "B1.svg", renderer=bz.SVGRenderer(width=900, embed_font=Tr
 every viewer draws exactly the glyphs the layout measured. Without it, a viewer
 missing the font substitutes another and labels may sit slightly off.
 
+For ReportLab documents, `beamz9000.render.reportlab.ReportLabRenderer` draws
+a diagram as a platypus Flowable or a one-page PDF (see {doc}`ymprint`).
+
 `MatplotlibRenderer.figure()` returns a matplotlib `Figure` for further work,
 and `to_bytes()` returns the encoded file without writing it.
 
+(fitting-to-a-size)=
 ## Fitting to a size
 
 Reports and calc sheets have a fixed space for a figure. Give the renderer a
@@ -83,6 +87,25 @@ diagram = bz.beam_diagram("beams.yaml", aspect=6.5 / 2.5)
 
 Set `legend_position="right"` or `"top"` to fix the legend's place, and
 `stretch=(1, 1)` to keep the layout's proportions.
+
+## Text size in points
+
+`Layout.font_size` is a fraction of the beam length, so text grows and
+shrinks with the drawing. For documents, set `font_size_pt` instead:
+
+```python
+layout = bz.Layout(font_size_pt=8)
+bz.draw("beams.yaml", "B1.pdf", layout, renderer=bz.MatplotlibRenderer(width=6.5, height=2.5))
+```
+
+`draw` knows the output width, so text comes out 8 pt high whatever the
+beam's length or the box's shape. Supports, arrowheads, ticks and legend
+swatches scale with the text, so they keep their size next to the labels.
+Calling `beam_diagram` directly, pass the output width in points as `width`.
+
+When labels grow, beamz9000 keeps them clear of the drawing: a spring's
+stiffness goes to whichever side of its support has room (or under it), and a
+span dimension wider than its span moves beyond the line's end or under it.
 
 ## Changing a finished diagram
 
