@@ -39,6 +39,51 @@ missing the font substitutes another and labels may sit slightly off.
 `MatplotlibRenderer.figure()` returns a matplotlib `Figure` for further work,
 and `to_bytes()` returns the encoded file without writing it.
 
+## Fitting to a size
+
+Reports and calc sheets have a fixed space for a figure. Give the renderer a
+`height` as well as a `width` and the output is exactly that size:
+
+```python
+renderer = bz.MatplotlibRenderer(width=6.5, height=2.5)   # inches
+bz.draw("beams.yaml", "B1.png", renderer=renderer)
+```
+
+`draw` then arranges the diagram to fill the box, not only scale it:
+
+- **The load strata stretch or squeeze.** Load heights and the gaps between
+  bands are scaled, within `Layout.stretch` (0.6 to 2 by default), toward the
+  box's shape. Text, supports and dimensions keep their size and spacing.
+- **The legend moves on top when that's better.** With
+  `legend_position="auto"` (the default), the legend goes above the loads when
+  that draws the beam larger than a legend on the right. On top, its keys run
+  in rows that wrap at the drawing's width.
+
+Whatever space is left is shared equally on both sides, so the drawing is
+centred.
+
+The same beam, fitted to 6.5 × 2 in (legend on the right, loads squeezed):
+
+```{beam-figure} beam_scheme.yaml B1
+:size: 6.5 2
+```
+
+and to 6.5 × 3.5 in (legend on top):
+
+```{beam-figure} beam_scheme.yaml B1
+:size: 6.5 3.5
+```
+
+Without a renderer, call `beam_diagram` with the box's `aspect` (width ÷
+height). Pass the renderer's `margin` too, so the fit counts it:
+
+```python
+diagram = bz.beam_diagram("beams.yaml", aspect=6.5 / 2.5)
+```
+
+Set `legend_position="right"` or `"top"` to fix the legend's place, and
+`stretch=(1, 1)` to keep the layout's proportions.
+
 ## Changing a finished diagram
 
 {func}`~beamz9000.diagram.compose.beam_diagram` returns a

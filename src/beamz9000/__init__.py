@@ -30,11 +30,17 @@ def draw(obj, path: Union[str, pathlib.Path], layout: Optional[Layout] = None,
     BeamSpec, or an already-built diagram Group) to 'path'. The suffix picks
     the format: .svg uses the native SVGRenderer, anything else (png, pdf,
     ...) the MatplotlibRenderer, unless 'renderer' is given.
+
+    A renderer with a `height` sets the output's exact size, and the diagram
+    is arranged to fill it (see `beam_diagram`'s 'aspect').
     """
     path = pathlib.Path(path)
-    diagram = obj if isinstance(obj, Group) else beam_diagram(obj, layout, beam_id)
     if renderer is None:
         renderer = SVGRenderer() if path.suffix.lower() == ".svg" else MatplotlibRenderer()
+    if isinstance(obj, Group):
+        diagram = obj
+    else:
+        diagram = beam_diagram(obj, layout, beam_id, aspect=renderer.aspect, margin=renderer.margin)
     return renderer.save(diagram, path)
 
 

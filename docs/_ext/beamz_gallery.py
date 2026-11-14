@@ -9,6 +9,9 @@ directive:
     ```{beam-figure} gallery.yaml simple_udl
     A simply supported beam.
     ```
+
+With `:size: 6.5 2` the beam is fitted to a 6.5 × 2 in image, rendered when
+the page is read.
 """
 
 from __future__ import annotations
@@ -47,17 +50,19 @@ class BeamFigure(SphinxDirective):
 
     required_arguments = 2  # scheme file name, beam id
     has_content = True
-    option_spec = {"alt": directives.unchanged, "no-downloads": directives.flag}
+    option_spec = {"alt": directives.unchanged, "no-downloads": directives.flag, "size": directives.unchanged}
 
     def run(self):
         scheme, beam_id = self.arguments
-        stem = pathlib.Path(scheme).stem
+        name = f"{pathlib.Path(scheme).stem}-{beam_id}"
         out = pathlib.Path(self.config.beamz_gallery_output)
+        if "size" in self.options:
+            name = self._render_sized(scheme, beam_id, out)
         docdir = pathlib.Path(self.env.doc2path(self.env.docname)).parent
         rel = pathlib.Path(*[".."] * len(docdir.relative_to(self.env.srcdir).parts), out.relative_to(self.env.srcdir))
 
         figure = nodes.figure(classes=["beam-figure"])
-        uri = (rel / f"{stem}-{beam_id}.png").as_posix()
+        uri = (rel / f"{name}.png").as_posix()
         image = nodes.image(uri=uri, alt=self.options.get("alt", f"Free-body diagram of {beam_id}"))
         figure += image
         if self.content:
@@ -76,13 +81,30 @@ class BeamFigure(SphinxDirective):
                 from sphinx import addnodes
 
                 ref = addnodes.download_reference(
-                    "", "", refdoc=self.env.docname, reftarget="/" + (out.relative_to(self.env.srcdir) / f"{stem}-{beam_id}.{fmt}").as_posix(),
+                    "", "", refdoc=self.env.docname, reftarget="/" + (out.relative_to(self.env.srcdir) / f"{name}.{fmt}").as_posix(),
                     refexplicit=True,
                 )
                 ref += nodes.literal(fmt.upper(), fmt.upper())
                 para += ref
             result.append(para)
         return result
+
+
+    def _render_sized(self, scheme: str, beam_id: str, out: pathlib.Path) -> str:
+        """Renders the beam fitted to ':size: W H' (inches); returns the file name, without suffix."""
+        import beamz9000 as bz
+
+        w, h = (float(v) for v in self.options["size"].split())
+        stem = f"{pathlib.Path(scheme).stem}-{beam_id}-{w:g}x{h:g}"
+        source = pathlib.Path(self.config.beamz_gallery_examples) / scheme
+        self.env.note_dependency(str(source))
+        for fmt, renderer in [
+            ("png", bz.MatplotlibRenderer(width=w, height=h, dpi=160)),
+            ("pdf", bz.MatplotlibRenderer(width=w, height=h)),
+            ("svg", bz.SVGRenderer(width=w * 96, height=h * 96)),
+        ]:
+            bz.draw(source, out / f"{stem}.{fmt}", beam_id=beam_id, renderer=renderer)
+        return stem
 
 
 def setup(app):
