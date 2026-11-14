@@ -6,6 +6,11 @@ Every function here is pure: it takes a BeamSpec and a Layout (and, where it
 stacks on earlier parts, the bounds of what is already placed) and returns
 elements. `beam_diagram()` composes them in order.
 
+A beam with a `depth` is drawn as a rectangle centred on y = 0: loads rest on
+its top and supports hang from its bottom (fixed ends become walls at its
+ends). Node labels sit under each node, between the supports and the
+dimensions.
+
 Loads are drawn in bands, one per legend key (load case, occupancy, or
 "Factored"), stacked upward from the beam in the order keys first appear.
 Within a band, loads are packed into rows so that no two items (glyph plus
@@ -15,6 +20,7 @@ so bands can be compared by eye.
 
 from __future__ import annotations
 
+import math
 import pathlib
 from dataclasses import dataclass
 from typing import Optional, Union
@@ -77,12 +83,26 @@ def label(text: str, anchor, layout: Layout, length: float, *, ha="center", va="
 # --- Beam and supports ---------------------------------------------------------
 
 
+def _half_depth(spec: BeamSpec) -> float:
+    return (spec.depth or 0.0) / 2
+
+
 def beam_line(spec: BeamSpec, layout: Layout) -> Shape:
-    """The beam: one line on y = 0."""
+    """
+    The beam: one heavy line on y = 0, or, with a depth, a rectangle centred
+    on y = 0.
+    """
     import shapely
 
+    x0, x1 = spec.nodes[0], spec.nodes[-1]
+    if spec.depth:
+        d = _half_depth(spec)
+        return Shape(
+            geometry=shapely.box(x0, -d, x1, d), fill_color=layout.beam_fill,
+            stroke_color=layout.ink, stroke_width=layout.beam_outline_width, z=Z_BEAM, role="beam",
+        )
     return Shape(
-        geometry=shapely.LineString([(spec.nodes[0], 0.0), (spec.nodes[-1], 0.0)]),
+        geometry=shapely.LineString([(x0, 0.0), (x1, 0.0)]),
         stroke_color=layout.ink, stroke_width=layout.beam_stroke_width, z=Z_BEAM, role="beam",
     )
 
@@ -98,22 +118,59 @@ def _facing(spec: BeamSpec, idx: int, kind: str) -> str:
 
 
 def supports(spec: BeamSpec, layout: Layout) -> Group:
-    """A support glyph at each supported node; free ends get nothing."""
-    gw = layout.glyph_width * spec.length
+    """
+    A support glyph at each supported node, hanging from the beam's underside;
+    free ends get nothing. A fixed end becomes a wall at the beam's end, sized
+    to cover the beam's depth. A spring with a stiffness is labelled beside it.
+    """
+    L = spec.length
+    gw = layout.glyph_width * L
+    d = _half_depth(spec)
+    labels = spec.support_labels or [None] * len(spec.nodes)
     parts = []
-    for idx, (x, kind) in enumerate(zip(spec.nodes, spec.supports)):
+    for idx, (x, kind, k_label) in enumerate(zip(spec.nodes, spec.supports, labels)):
         if kind == "free":
             continue
-        body, ground = glyphs.support(kind, gw)
         facing = _facing(spec, idx, kind)
-        parts.append(group(
-            Shape(geometry=glyphs.place(body, (x, 0.0), facing), fill_color=layout.support_fill,
+        if facing == "up":
+            anchor, width = (x, -d), None
+        else:  # A wall at the beam's end, stretched to cover its depth.
+            anchor, width = (x, 0.0), max(gw, 2 * d * 1.2 + gw / 2)
+        size = gw
+        body, strokes = glyphs.support(kind, size, width=width)
+        items = [
+            Shape(geometry=glyphs.place(body, anchor, facing), fill_color=layout.support_fill,
                   stroke_color=layout.ink, stroke_width=layout.stroke_width, z=Z_SUPPORT),
-            Shape(geometry=glyphs.place(ground, (x, 0.0), facing), stroke_color=layout.ink,
+            Shape(geometry=glyphs.place(strokes, anchor, facing), stroke_color=layout.ink,
                   stroke_width=layout.stroke_width, z=Z_SUPPORT),
-            role="support",
-        ))
+        ]
+        if k_label:
+            fs = _font_size(layout, L)
+            x_right = max(it.bounds[2] for it in items if not it.is_empty)
+            items.append(label(k_label, (x_right + layout.label_gap * fs, anchor[1] - glyphs.support_height(size) / 2),
+                               layout, L, ha="left", va="center"))
+        parts.append(group(items, role="support"))
     return group(parts, role="supports")
+
+
+def node_labels(spec: BeamSpec, layout: Layout, supports_group: Group) -> Group:
+    """Each node's label, centred under its node on a line below the lowest support."""
+    L = spec.length
+    fs = _font_size(layout, L)
+    gap = layout.label_gap * fs
+    by_node: dict[int, float] = {}
+    supported = [i for i, k in enumerate(spec.supports) if k != "free"]
+    for i, sup in zip(supported, supports_group.children):
+        shapes = [c for c in sup.children if isinstance(c, Shape) and not c.is_empty]
+        by_node[i] = min(c.bounds[1] for c in shapes)
+    # All labels share one line, under the lowest support.
+    bottom = min([*by_node.values(), -_half_depth(spec)])
+    parts = [
+        label(text, (x, bottom - gap), layout, L, va="top", font_weight="bold")
+        for x, text in zip(spec.nodes, spec.node_labels or [])
+        if text
+    ]
+    return group(parts, role="node_labels")
 
 
 # --- Load items -----------------------------------------------------------------
@@ -133,10 +190,14 @@ def load_item(load: SpecLoad, scale: _Scale, color: str, layout: Layout) -> Grou
 
     if load.kind == "point":
         h = scale.point(load.mag1)
-        tail, tip = ((load.x1, h), (load.x1, 0.0)) if load.mag1 >= 0 else ((load.x1, 0.0), (load.x1, h))
+        # The end away from the base, tilted counter-clockwise by 'angle' about the base.
+        a = math.radians(load.angle)
+        far = (load.x1 - h * math.sin(a), h * math.cos(a))
+        base = (load.x1, 0.0)
+        tail, tip = (far, base) if load.mag1 >= 0 else (base, far)
         shaft, arrowhead = glyphs.arrow(tail, tip, hl, hw)
         parts += [Shape(geometry=shaft, **stroke), Shape(geometry=arrowhead, **head),
-                  label(load.label1, (load.x1, h + gap), layout, L, color=color)]
+                  label(load.label1, (far[0], far[1] + gap), layout, L, color=color)]
 
     elif load.kind == "moment":
         r = scale.size(layout.moment_radius)
@@ -292,18 +353,20 @@ def as_spec(obj, beam_id: Optional[str] = None) -> BeamSpec:
 def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = None) -> Group:
     """
     Returns the free-body diagram of a beam as one Group: load bands above the
-    beam, supports, dimensions below, and the legend to the right. 'obj' is
+    beam, supports and node labels, dimensions below, and the legend to the right. 'obj' is
     anything `as_spec` accepts.
     """
     spec = as_spec(obj, beam_id)
     layout = layout or Layout()
     beam = beam_line(spec, layout)
     sup = supports(spec, layout)
-    loads = load_bands(spec, layout, base=0.0)
-    lowest = min(sup.bounds[1], 0.0) if len(sup) else 0.0
+    labels = node_labels(spec, layout, sup)
+    loads = load_bands(spec, layout, base=_half_depth(spec))
+    below = [g.bounds[1] for g in (sup, labels) if len(g)]
+    lowest = min([*below, -_half_depth(spec)])
     dims = dimensions(spec, layout, top=lowest)
-    body = group(loads, beam, sup, dims)
-    parts = [loads, beam, sup, dims]
+    body = group(loads, beam, sup, labels, dims)
+    parts = [loads, beam, sup, labels, dims]
     if layout.legend:
         parts.append(legend(spec, layout, body.bounds))
     return group(parts, role="diagram")

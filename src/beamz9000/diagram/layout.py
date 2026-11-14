@@ -35,7 +35,9 @@ class Layout(BaseModel):
 
     # Beam and supports
     glyph_width: float = 0.04
-    beam_stroke_width: float = 4.0
+    beam_stroke_width: float = Field(4.0, description="Beam line weight when it has no depth.")
+    beam_fill: str = "#f2f2f2"
+    beam_outline_width: float = Field(1.5, description="Beam outline weight when it has a depth.")
     support_fill: str = "#d9d9d9"
     ink: str = "black"
     stroke_width: float = 1.0

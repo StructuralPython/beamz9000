@@ -22,7 +22,8 @@ Conventions
 - `span_loc: [i, offset]` locates a point within span i (0-based). A bare
   integer `span_loc: i` means the end of span i.
 - Positive force magnitudes act downward (gravity). Positive moments are
-  counter-clockwise.
+  counter-clockwise. A point load's `angle` (degrees from vertical) tilts its
+  tail counter-clockwise about its tip when positive.
 - A load without a `case` is an already-factored load.
 """
 
@@ -92,7 +93,12 @@ Location = Annotated[Any, AfterValidator(_location)]
 # (span index, offset or "S"); a bare index means the end of that span.
 SpanLocation = Annotated[Any, AfterValidator(_span_location)]
 
-SupportType = Literal["pin", "roller", "fixed", "free"]
+SupportType = Literal["pin", "roller", "fixed", "free", "spring", "rotational_spring"]
+_SUPPORT_ALIASES = {
+    "pinned": "pin", "hinge": "pin", "fix": "fixed", "none": "free",
+    "v_spring": "spring", "vertical_spring": "spring",
+    "m_spring": "rotational_spring", "rot_spring": "rotational_spring",
+}
 Diagram = Literal["moment", "shear", "deflection", "rotation"]
 
 
@@ -144,10 +150,14 @@ class _PointLike(_Load):
 
 
 class PointLoad(_PointLike):
-    """A concentrated force. Positive acts downward."""
+    """
+    A concentrated force. Positive acts downward. `angle` is in degrees from
+    vertical: positive tilts the arrow's tail counter-clockwise about its tip.
+    """
 
     type: Literal["point"] = "point"
     mag: Force = Field(validation_alias=AliasChoices("mag", "magnitude", "p"))
+    angle: float = Field(0.0, ge=-90, le=90, validation_alias=AliasChoices("angle", "alpha"))
 
 
 class MomentLoad(_PointLike):
@@ -309,6 +319,50 @@ class ResolvedLoad(_Model):
     mag2: Optional[Value] = None
     label: Optional[str] = None
     pressure: Optional[Value] = Field(None, description="For pressure loads: the area load.")
+    angle: float = Field(0.0, description="For point loads: degrees from vertical.")
+
+
+# --- Supports -----------------------------------------------------------------
+
+
+class Support(_Model):
+    """
+    A support at a node. Springs may give a stiffness `k`: force per length
+    for a `spring`, moment per radian for a `rotational_spring`. A rotational
+    spring also restrains translation, like a pin.
+    """
+
+    type: SupportType
+    k: Optional[Any] = None
+
+    @model_validator(mode="after")
+    def _check_k(self):
+        if self.k is not None:
+            if self.type not in ("spring", "rotational_spring"):
+                raise ValueError(f"only springs take a stiffness `k`, not a {self.type}")
+            units.check_kind(self.k, self.type)
+        return self
+
+
+def _support_item(value: Any) -> Any:
+    """
+    Normalizes a support to {type, k}. Accepted forms: "pin", {type: spring,
+    k: 5 kN/mm}, or {spring: 5 kN/mm}.
+    """
+    if isinstance(value, Support):
+        return value
+    if isinstance(value, str):
+        value = {"type": value}
+    elif isinstance(value, dict) and "type" not in value and len(value) == 1:
+        (kind, k), = value.items()
+        value = {"type": kind, "k": k}
+    if isinstance(value, dict) and isinstance(value.get("type"), str):
+        kind = value["type"].strip().lower()
+        value = {**value, "type": _SUPPORT_ALIASES.get(kind, kind)}
+    return value
+
+
+SupportIn = Annotated[Support, BeforeValidator(_support_item)]
 
 
 # --- Beam ---------------------------------------------------------------------
@@ -322,12 +376,18 @@ class Beam(_Model):
     e: Optional[Modulus] = None
     i: Optional[Inertia] = None
     ei: Optional[Stiffness] = None
-    supports: Optional[Union[list[SupportType], dict[int, SupportType]]] = Field(
+    supports: Optional[Union[list[SupportIn], dict[int, SupportIn]]] = Field(
         None,
         description=(
-            "Overrides the assumed supports: one type per node (spans + 1), "
-            "or {node index: type} for just the nodes that differ."
+            "Overrides the assumed supports: one per node (spans + 1), "
+            "or {node index: support} for just the nodes that differ."
         ),
+    )
+    depth: Optional[Length] = Field(None, description="Drawn depth of the beam; a line if not given.")
+    node_labels: Optional[Union[Literal["auto"], list[Optional[str]]]] = Field(
+        None,
+        validation_alias=AliasChoices("node_labels", "labels"),
+        description="One label per node (null to skip one), or `auto` for A, B, C, ...",
     )
     loads: list[Load] = Field(default_factory=list)
     occupancies: dict[str, dict[str, Pressure]] = Field(default_factory=dict)
@@ -347,7 +407,7 @@ class Beam(_Model):
             data["load_combos"] = {k: _combo(v) for k, v in combos.items()}
         if data.get("loads") is None:
             data.pop("loads", None)
-        for key in ("supports", "e", "i", "ei", "cantilever", "results"):
+        for key in ("supports", "e", "i", "ei", "cantilever", "results", "depth", "node_labels", "labels"):
             if key in data and (data[key] is None or data[key] is ... or data[key] == "..."):
                 data.pop(key)
         return data
@@ -361,10 +421,17 @@ class Beam(_Model):
             raise ValueError("give either `ei` or both `e` and `i`, not both")
         if (self.e is None) != (self.i is None):
             raise ValueError("`e` and `i` must be given together (or give `ei`)")
+        self._check_supports()
         self._check_units()
+        if self.depth is not None and units.si(self.depth) <= 0:
+            raise ValueError(f"`depth` must be positive, got {units.label(self.depth)}")
+        if isinstance(self.node_labels, list) and len(self.node_labels) != len(self.spans) + 1:
+            raise ValueError(
+                f"`node_labels` lists {len(self.node_labels)} labels but the beam has "
+                f"{len(self.spans) + 1} nodes"
+            )
         if self.cantilever == "both" and len(self.spans) < 3:
             raise ValueError("`cantilever: both` needs at least 3 spans")
-        self._check_supports()
         self._check_occupancies()
         _ = self.resolved_loads
         if self.stiffness is None and {"deflection", "rotation"} & set(self.results.diagrams):
@@ -376,7 +443,8 @@ class Beam(_Model):
 
     def _check_units(self):
         """A beam must use quantities throughout or plain numbers throughout."""
-        values = list(self.spans) + [self.e, self.i, self.ei]
+        values = list(self.spans) + [self.e, self.i, self.ei, self.depth]
+        values += [s.k for s in self.support_specs]
         for load in self.loads:
             values += [v for k, v in load if k.startswith(("mag", "loc", "trib")) and not isinstance(v, str)]
             values += [v[1] for k, v in load if k.startswith("span_loc") and v is not None]
@@ -395,7 +463,7 @@ class Beam(_Model):
         n_nodes = len(self.spans) + 1
         if isinstance(self.supports, list) and len(self.supports) != n_nodes:
             raise ValueError(
-                f"`supports` lists {len(self.supports)} types but the beam has {n_nodes} nodes"
+                f"`supports` lists {len(self.supports)} supports but the beam has {n_nodes} nodes"
             )
         if isinstance(self.supports, dict):
             bad = [k for k in self.supports if not 0 <= k < n_nodes]
@@ -410,7 +478,8 @@ class Beam(_Model):
                     f"which does not leave that end free"
                 )
         restrained = [t for t in types if t != "free"]
-        if not ("fixed" in types or (len(restrained) >= 2 and "pin" in types)):
+        horizontal = {"pin", "fixed", "rotational_spring"} & set(types)
+        if not ("fixed" in types or (len(restrained) >= 2 and horizontal)):
             warnings.warn(f"the supports {types} do not make a stable beam", stacklevel=3)
 
     def _check_occupancies(self):
@@ -460,6 +529,11 @@ class Beam(_Model):
 
     @property
     def node_supports(self) -> list[SupportType]:
+        """The support type at each node (see `support_specs`)."""
+        return [s.type for s in self.support_specs]
+
+    @property
+    def support_specs(self) -> list[Support]:
         """
         The support at each node. Unless overridden, a pin at the first
         supported node and rollers at the others, with cantilevered ends free.
@@ -479,10 +553,21 @@ class Beam(_Model):
                 else:
                     types.append("roller" if pinned else "pin")
                     pinned = True
+        specs = [Support(type=t) for t in types]
         if isinstance(self.supports, dict):
-            for idx, kind in self.supports.items():
-                types[idx] = kind
-        return types
+            for idx, support in self.supports.items():
+                specs[idx] = support
+        return specs
+
+    @property
+    def labels(self) -> list[Optional[str]]:
+        """The label at each node: A, B, C, ... with `node_labels: auto`."""
+        n = len(self.spans) + 1
+        if self.node_labels == "auto":
+            return [_letters(i) for i in range(n)]
+        if self.node_labels is None:
+            return [None] * n
+        return list(self.node_labels)
 
     @property
     def cases(self) -> list[str]:
@@ -553,7 +638,8 @@ class Beam(_Model):
         common = dict(index=idx, case=load.case, label=load.label, source=load.type)
         if isinstance(load, (PointLoad, MomentLoad)):
             x = self._resolve(load.loc, load.span_loc, None)
-            return [ResolvedLoad(kind=load.type, x1=x, mag1=load.mag, **common)]
+            angle = getattr(load, "angle", 0.0)
+            return [ResolvedLoad(kind=load.type, x1=x, mag1=load.mag, angle=angle, **common)]
         x1 = self._resolve(load.loc1, load.span_loc1, start)
         x2 = self._resolve(load.loc2, load.span_loc2, end)
         if units.si(x2) <= units.si(x1):
@@ -575,6 +661,16 @@ class Beam(_Model):
             )
             for case, q in pressures.items()
         ]
+
+
+def _letters(i: int) -> str:
+    """0 -> A, 25 -> Z, 26 -> AA, ..."""
+    out = ""
+    i += 1
+    while i:
+        i, r = divmod(i - 1, 26)
+        out = chr(65 + r) + out
+    return out
 
 
 # --- Scheme file -------------------------------------------------------------

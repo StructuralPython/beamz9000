@@ -44,6 +44,7 @@ class SpecLoad(_Frozen):
     label1: str = Field(description="Label for the load, or for its start if label2 is given.")
     label2: Optional[str] = Field(None, description="Label for the end of a varying line load.")
     area_load: bool = Field(False, description="True for line loads from pressures (drawn hatched).")
+    angle: float = Field(0.0, description="Point loads: degrees from vertical; + tilts the tail CCW.")
 
 
 class LegendKey(_Frozen):
@@ -57,6 +58,11 @@ class BeamSpec(_Frozen):
     name: Optional[str] = None
     nodes: list[float]
     supports: list[SupportType]
+    support_labels: list[Optional[str]] = Field(
+        default_factory=list, description="Per node: a spring's stiffness label, else None."
+    )
+    node_labels: list[Optional[str]] = Field(default_factory=list, description="Per node; None for no label.")
+    depth: Optional[float] = Field(None, description="Drawn beam depth; None draws a line.")
     loads: list[SpecLoad] = Field(default_factory=list)
     keys: list[LegendKey] = Field(default_factory=list, description="Legend keys in drawing order.")
     span_labels: list[str]
@@ -103,6 +109,9 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         name=name,
         nodes=[units.si(n) for n in beam.nodes],
         supports=beam.node_supports,
+        support_labels=[_stiffness_label(s) for s in beam.support_specs],
+        node_labels=beam.labels,
+        depth=units.si(beam.depth) if beam.depth is not None else None,
         loads=loads,
         keys=[LegendKey(name=k, kind=v) for k, v in keys.items()],
         span_labels=[units.label(s) for s in beam.spans],
@@ -110,17 +119,36 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
     )
 
 
+def _mag_label(value) -> str:
+    """
+    A magnitude label: unsigned, since the glyph shows the direction, and
+    empty for zero (e.g. the start of a triangular load).
+    """
+    if units.si(value) == 0:
+        return ""
+    return units.label(abs(value))
+
+
+def _stiffness_label(support) -> Optional[str]:
+    if support.k is None:
+        return None
+    text = units.label(support.k)
+    if support.type == "rotational_spring" and units.is_quantity(support.k):
+        text += "/rad"
+    return text
+
+
 def _spec_load(r, key: str) -> SpecLoad:
     common = dict(kind=r.kind, key=key, x1=units.si(r.x1), mag1=units.si(r.mag1))
     if r.kind != "line":
-        return SpecLoad(**common, label1=r.label or units.label(r.mag1))
+        return SpecLoad(**common, label1=r.label or _mag_label(r.mag1), angle=r.angle)
     mag2 = units.si(r.mag2)
     if r.pressure is not None:
-        labels = (r.label or units.label(r.pressure), None)
+        labels = (r.label or _mag_label(r.pressure), None)
     elif r.label is not None or units.si(r.mag1) == mag2:
-        labels = (r.label or units.label(r.mag1), None)
+        labels = (r.label or _mag_label(r.mag1), None)
     else:
-        labels = (units.label(r.mag1), units.label(r.mag2))
+        labels = (_mag_label(r.mag1), _mag_label(r.mag2))
     return SpecLoad(
         **common, x2=units.si(r.x2), mag2=mag2, label1=labels[0], label2=labels[1],
         area_load=r.pressure is not None,
@@ -137,5 +165,5 @@ def _combined_occupancy(occupancy: str, parts) -> SpecLoad:
     return SpecLoad(
         kind="line", key=occupancy, x1=units.si(first.x1), x2=units.si(first.x2),
         mag1=units.si(mag1), mag2=units.si(mag2),
-        label1=first.label or units.label(total_q), area_load=True,
+        label1=first.label or _mag_label(total_q), area_load=True,
     )

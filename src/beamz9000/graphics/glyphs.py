@@ -15,7 +15,7 @@ meets it, with the support drawn below. Arrows point from tail to tip.
 from __future__ import annotations
 
 import math
-from typing import Literal
+from typing import Literal, Optional
 
 import numpy as np
 import shapely
@@ -23,7 +23,7 @@ from shapely import LineString, MultiLineString, MultiPolygon, Point, Polygon, a
 from shapely.geometry.base import BaseGeometry
 
 Facing = Literal["up", "down", "left", "right"]
-SupportKind = Literal["pin", "roller", "fixed", "free"]
+SupportKind = Literal["pin", "roller", "fixed", "free", "spring", "rotational_spring"]
 
 EMPTY = shapely.GeometryCollection()
 
@@ -85,46 +85,96 @@ def roller_body(gw: float, resolution: int = 16) -> Polygon:
     return Point(0.0, -sh / 2).buffer(sh / 2, quad_segs=resolution)
 
 
-def fixed_body(gw: float) -> Polygon:
-    """A block between the origin and the ground."""
-    sw, ge = support_width(gw), ground_elevation(gw)
+def fixed_body(gw: float, width: Optional[float] = None) -> Polygon:
+    """
+    A block between the origin and the ground. 'width' (along the ground)
+    defaults to the support width; a wider block covers a deep beam's end
+    without growing the rest of the glyph.
+    """
+    sw, ge = width or support_width(gw), ground_elevation(gw)
     return shapely.box(-sw / 2, ge, sw / 2, 0.0)
 
 
-def ground_line(gw: float) -> LineString:
-    """The ground line under a support, one glyph width long."""
-    ge = ground_elevation(gw)
-    return LineString([(-gw / 2, ge), (gw / 2, ge)])
+def ground_line(gw: float, width: Optional[float] = None) -> LineString:
+    """The ground line under a support, 'width' long (default: one glyph width)."""
+    ge, w = ground_elevation(gw), width or gw
+    return LineString([(-w / 2, ge), (w / 2, ge)])
 
 
-def ground_ticks(gw: float, n_ticks: int = 4) -> MultiLineString:
-    """'n_ticks' 45° hatch ticks hanging below the ground line."""
-    ge, td = ground_elevation(gw), tick_depth(gw)
-    spacing = gw / (n_ticks - 1)
+def ground_ticks(gw: float, n_ticks: int = 4, width: Optional[float] = None) -> MultiLineString:
+    """'n_ticks' 45° hatch ticks hanging below a ground line 'width' long."""
+    ge, td, w = ground_elevation(gw), tick_depth(gw), width or gw
+    spacing = w / (n_ticks - 1)
     ticks = []
     for i in range(n_ticks):
-        x1 = -gw / 2 + i * spacing
+        x1 = -w / 2 + i * spacing
         ticks.append(LineString([(x1 - td, ge - td), (x1, ge)]))
     return MultiLineString(ticks)
 
 
-def ground(gw: float, n_ticks: int = 4) -> MultiLineString:
+def ground(gw: float, n_ticks: int = 4, width: Optional[float] = None) -> MultiLineString:
     """The ground line and its ticks, as one geometry."""
-    return MultiLineString([ground_line(gw), *ground_ticks(gw, n_ticks).geoms])
+    return MultiLineString([ground_line(gw, width), *ground_ticks(gw, n_ticks, width).geoms])
 
 
-_BODIES = {"pin": pin_body, "roller": roller_body, "fixed": fixed_body}
-
-
-def support(kind: SupportKind, gw: float, n_ticks: int = 4) -> tuple[BaseGeometry, BaseGeometry]:
+def spring_coil(gw: float, coils: int = 3, lead: float = 0.15) -> LineString:
     """
-    Returns (body, ground) for a support of 'kind' at the origin. They are kept
-    apart so each can be styled on its own: a filled body and a stroked ground.
-    A "free" end returns two empty geometries.
+    A zigzag spring from the origin down to the ground, with short straight
+    leads ('lead' × height) at each end.
+    """
+    sh, sw = support_height(gw), support_width(gw)
+    top, bottom = -lead * sh, -(1 - lead) * sh
+    pts = [(0.0, 0.0), (0.0, top)]
+    n = 2 * coils
+    for i in range(n):
+        y = top + (bottom - top) * (i + 0.5) / n
+        pts.append((sw / 2 if i % 2 == 0 else -sw / 2, y))
+    pts += [(0.0, bottom), (0.0, -sh)]
+    return LineString(pts)
+
+
+def spiral(r_inner: float, r_outer: float, turns: float = 1.75, segments: int = 64,
+           start: float = 90.0) -> LineString:
+    """An Archimedean spiral about the origin, winding outward counter-clockwise."""
+    t = np.linspace(0.0, 1.0, segments)
+    r = r_inner + (r_outer - r_inner) * t
+    a = np.radians(start) + 2 * np.pi * turns * t
+    return LineString(np.column_stack([r * np.cos(a), r * np.sin(a)]))
+
+
+def rotational_spring_coil(gw: float) -> LineString:
+    """The spiral of a rotational spring, wound about the origin."""
+    return spiral(0.06 * gw, 0.36 * gw)
+
+
+_BODIES = {"pin": pin_body, "roller": roller_body, "fixed": fixed_body, "rotational_spring": pin_body}
+
+
+def support(kind: SupportKind, gw: float, n_ticks: int = 4,
+            width: Optional[float] = None) -> tuple[BaseGeometry, BaseGeometry]:
+    """
+    Returns (body, strokes) for a support of 'kind' at the origin. They are
+    kept apart so each can be styled on its own: a filled body, and stroked
+    lines (the ground, plus any spring coil). A "free" end returns two empty
+    geometries; a "spring" has no filled body.
+
+    'width' stretches the ground (and a fixed block, to width - gw/2) without
+    growing the glyph's height or ticks; extra ticks keep their spacing.
     """
     if kind == "free":
         return EMPTY, EMPTY
-    return _BODIES[kind](gw), ground(gw, n_ticks)
+    if width is not None and width > gw:
+        n_ticks = max(n_ticks, round((n_ticks - 1) * width / gw) + 1)
+    else:
+        width = None
+    lines = list(ground(gw, n_ticks, width).geoms)
+    if kind == "spring":
+        return Polygon(), MultiLineString([spring_coil(gw), *lines])
+    if kind == "rotational_spring":
+        lines.append(rotational_spring_coil(gw))
+    if kind == "fixed":
+        return fixed_body(gw, width - gw / 2 if width else None), MultiLineString(lines)
+    return _BODIES[kind](gw), MultiLineString(lines)
 
 
 def support_depth(gw: float) -> float:

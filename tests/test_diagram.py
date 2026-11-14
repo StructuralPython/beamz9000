@@ -42,8 +42,9 @@ def test_pack_rows():
 
 
 def test_strata_order(diagram):
-    loads, beam, supports, dims, legend = diagram.children
-    assert [c.role for c in diagram.children] == ["loads", "beam", "supports", "dimensions", "legend"]
+    loads, beam, supports, labels, dims, legend = diagram.children
+    assert [c.role for c in diagram.children] == [
+        "loads", "beam", "supports", "node_labels", "dimensions", "legend"]
     assert loads.bounds[1] > 0  # Loads sit above the beam,
     assert supports.bounds[3] <= 1e-9  # supports below it,
     assert dims.bounds[3] < supports.bounds[1]  # dimensions below the supports,
@@ -128,3 +129,97 @@ def test_png_size_follows_settings(tmp_path, diagram):
 
 def test_svg_embed_font(diagram):
     assert "@font-face" in bz.SVGRenderer(embed_font=True).to_string(diagram)
+
+
+FEATURES = pathlib.Path(__file__).parents[1] / "examples" / "drawing_features.yaml"
+
+
+@pytest.fixture(scope="module")
+def features():
+    return bz.load_scheme(FEATURES)
+
+
+def test_springs_parse_in_every_form(features):
+    b2 = features["B2"]
+    assert b2.node_supports == ["rotational_spring", "roller", "spring", "free"]
+    spec = from_scheme(b2)
+    assert spec.support_labels == ["8 MN·m/rad", None, "12 MN/m", None]
+    b = bz.Beam.model_validate({"spans": [4, 4], "supports": ["pinned", {"type": "v_spring", "k": 5}, "m_spring"]})
+    assert b.node_supports == ["pin", "spring", "rotational_spring"]
+
+
+@pytest.mark.parametrize("supports, message", [
+    (["pin", {"type": "roller", "k": 5}, "roller"], "only springs"),
+    (["pin", "roller", "bracket"], "bracket"),
+])
+def test_bad_supports(supports, message):
+    with pytest.raises(Exception, match=message):
+        bz.Beam.model_validate({"spans": [4, 4], "supports": supports})
+
+
+def test_spring_stiffness_dimension_checked():
+    with pytest.raises(Exception, match="spring"):
+        bz.parse_scheme({"_environment": "structural",
+                         "B": {"spans": ["4 m"], "supports": ["pin", {"spring": "5 kN"}]}})
+
+
+def test_spring_glyphs():
+    from beamz9000.graphics import glyphs as g
+    body, strokes = g.support("spring", 1.0)
+    assert body.is_empty and strokes.bounds[3] == pytest.approx(0.0)
+    body, strokes = g.support("rotational_spring", 1.0)
+    assert not body.is_empty and len(strokes.geoms) == 6  # ground, 4 ticks, spiral
+
+
+def test_depth_draws_rectangle_with_loads_on_top(features):
+    d = bz.beam_diagram(features, beam_id="B2")
+    loads, beam, supports = d.children[:3]
+    assert beam.geometry.geom_type == "Polygon"
+    assert beam.bounds[1] == pytest.approx(-0.225) and beam.bounds[3] == pytest.approx(0.225)
+    assert loads.bounds[1] > 0.225
+    roller = supports.children[1]
+    assert max(c.bounds[3] for c in roller.children) == pytest.approx(-0.225)
+
+
+def test_fixed_wall_covers_depth_without_growing(features):
+    d = bz.beam_diagram(features, beam_id="B3")
+    wall_body = d.children[2].children[0].children[0]
+    x0, y0, x1, y1 = wall_body.bounds
+    assert x1 == pytest.approx(0.0, abs=1e-9)
+    assert y0 < -0.3 and y1 > 0.3  # Covers the 600 mm depth,
+    assert x1 - x0 == pytest.approx(0.02 * 4.0)  # but keeps the glyph's thickness.
+
+
+def test_angled_point_load(features):
+    spec = from_scheme(features["B2"])
+    load = spec.loads[0]
+    assert load.angle == 30
+    item = [i for i in bz.beam_diagram(spec).children[0].children[0].children if i.key == "D"][0]
+    shaft = item.children[0].geometry
+    (x_tail, y_tail), (x_end, _) = shaft.coords
+    assert x_tail < load.x1 and y_tail > 0  # Tail tilted counter-clockwise, up and to the left.
+
+
+def test_angle_limits():
+    with pytest.raises(Exception, match="angle"):
+        bz.Beam.model_validate({"spans": [4], "loads": [{"point": {"p": 1, "loc": 1, "angle": 120}}]})
+
+
+def test_labels_are_unsigned_and_zero_labels_dropped(features):
+    texts = [t.text for t in flatten(bz.beam_diagram(features, beam_id="B2")) if isinstance(t, Text)]
+    assert "8 kN" in texts and "-8 kN" not in texts
+    spec = from_scheme(features["B3"])
+    tri = [l for l in spec.loads if l.kind == "line"][0]
+    assert (tri.label1, tri.label2) == ("", "8 kN/m")
+
+
+def test_node_labels(features):
+    d = bz.beam_diagram(features, beam_id="B2")
+    labels = d.children[3].children
+    assert [t.text for t in labels] == ["A", "B", "C", "D"]
+    assert len({t.anchor[1] for t in labels}) == 1  # One shared line,
+    assert labels[0].anchor[1] < d.children[2].bounds[1]  # below the supports,
+    assert d.children[4].bounds[3] < min(t.bounds[1] for t in labels)  # above the dimensions.
+    assert bz.Beam.model_validate({"spans": [1] * 27, "node_labels": "auto"}).labels[26:] == ["AA", "AB"]
+    with pytest.raises(Exception, match="node_labels"):
+        bz.Beam.model_validate({"spans": [4], "labels": ["A"]})

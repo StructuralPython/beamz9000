@@ -31,6 +31,8 @@ DIMENSIONS: dict[str, Dimensions] = {
     "modulus": _dims(kg=1, m=-1, s=-2),
     "inertia": _dims(m=4),
     "stiffness": _dims(kg=1, m=3, s=-2),
+    "spring": _dims(kg=1, s=-2),  # Force per length, e.g. kN/mm.
+    "rotational_spring": _dims(kg=1, m=2, s=-2),  # Moment per radian, e.g. kN·m/rad.
 }
 
 
