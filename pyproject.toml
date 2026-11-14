@@ -1,19 +1,31 @@
-[build-system]
-requires = ["flit_core >=3.2,<4"]
-build-backend = "flit_core.buildapi"
-
 [project]
 name = "beamz9000"
-authors = [{name = "Connor Ferster", email = "connor@structuralpython.com"}]
+version = "0.1.0"
+description = "Beam free-body diagrams from a simple YAML scheme, drawn through shapely geometry."
 readme = "README.md"
-license = {file = "LICENSE"}
-classifiers = ["License :: OSI Approved :: Apache Software License"]
-dynamic = ["version", "description"]
+license = "Apache-2.0"
+authors = [{ name = "Connor Ferster", email = "connor@structuralpython.com" }]
+requires-python = ">=3.12"
 dependencies = [
-    "matplotlib",
-    "numpy",
-    "svgpathtools",
+    "forallpeople>=3.4.0",
+    "matplotlib>=3.11",
+    "pydantic>=2.10",
+    "pyyaml>=6.0",
+    "shapely>=2.1",
 ]
 
 [project.urls]
-Home = "https://github.com/connorferster/beamz9000"
+Home = "https://github.com/StructuralPython/beamz9000"
+
+[build-system]
+requires = ["uv_build>=0.9.14,<0.12"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

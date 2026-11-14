@@ -1,0 +1,52 @@
+# units acceoted with forallpeople yaml loader
+beam_id:
+  spans: [4500, 2500]
+  cantilever: right # left, right, both; if one span, cantilever right means fixed on the left and vice versa
+  e: ...
+  i: ...
+  # optional: ei; rotation, deflection not calculated if empty
+  supports: # optional, for over-riding assumed supports of pin + rollers
+  loads:
+    - point:
+        mag: 
+        # alias: magnitude, p
+        # -ve values are from end (L - val)
+        loc: # global location, L accepted
+        span_loc: [1, 1250] # 5750 global
+        case: # optional, assumes factored if not provided
+    - dist:
+        mag1: 
+        # optional alias: mag for udl
+        mag2: 
+        # optional locs, udl if not used
+        loc1: # global loc
+        # x1: optional alias
+        span_loc1: [0, S] # S accepted for end of span, integer accepted as end of that span idx
+        case: # optional, assumes an already factored load if not provided
+    - pressure:
+        mag:
+        trib_width1: 
+        trib_width2: 
+        loc1:
+        loc2:
+        case: # Optional, assumes factored if not
+    - moment:
+        # same as point
+  - occupancies: # optional
+      - residential:
+          case_id1: 1.2
+          case_id2: 2.4
+          # etc
+  - load_combos:
+      - combo_name1:
+          name: ...
+          factor: ...
+      - combo_name2: # acceptable alternative 2nd format
+          name: 1.2 
+  - results:
+      - diagrams:
+          - moment
+          - shear
+
+        
+        
