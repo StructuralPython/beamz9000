@@ -310,10 +310,14 @@ def dimensions(spec: BeamSpec, layout: Layout, top: float) -> Group:
     y = top - layout.dimension_gap * L - fs
     parts = [Shape(geometry=glyphs.dimension_line(spec.nodes, y, tick), **style)]
     last = len(spec.spans) - 1
+    lowest = parts[0].bounds[1]  # The span line, ticks included.
     for i, ((a, b), text) in enumerate(zip(zip(spec.nodes, spec.nodes[1:]), spec.span_labels)):
-        parts.append(_span_label(text, a, b, y, i == 0, i == last, layout, L))
+        span_label = _span_label(text, a, b, y, i == 0, i == last, layout, L)
+        parts.append(span_label)
+        lowest = min(lowest, span_label.bounds[1])
     if len(spec.spans) > 1:
-        y -= layout.dimension_spacing * L
+        # Far enough down that the overall label clears the span row and its labels.
+        y = min(y - layout.dimension_spacing * L, lowest - 2 * gap - fs)
         parts.append(Shape(geometry=glyphs.dimension_line([spec.nodes[0], spec.nodes[-1]], y, tick), **style))
         parts.append(label(spec.length_label, ((spec.nodes[0] + spec.nodes[-1]) / 2, y + gap), layout, L))
     return group(parts, role="dimensions")
