@@ -143,6 +143,18 @@ supports:
 - See `examples/drawing_features.yaml` for depth, springs, angled loads and
   node labels together.
 
+### Fitting to a size
+
+A renderer with a `height` outputs exactly `width × height`, and `draw`
+arranges the diagram to fill it. The load strata stretch within
+`Layout.stretch`, and the legend moves on top of the loads when that draws the
+beam larger:
+
+```python
+bz.draw("beams.yaml", "B1.png", renderer=bz.MatplotlibRenderer(width=6.5, height=2.5))
+diagram = bz.beam_diagram("beams.yaml", aspect=6.5 / 2.5)   # without a renderer
+```
+
 ### Occupancies, combinations, results
 
 - `occupancies` and `load_combos` accept a list of `- name: {...}` items or a

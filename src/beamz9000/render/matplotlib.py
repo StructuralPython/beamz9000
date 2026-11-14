@@ -34,6 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from shapely.geometry.base import BaseGeometry
 
 from beamz9000.graphics import text as shaping
+from beamz9000.render.frame import frame
 from beamz9000.graphics.elements import Element, Shape, Text, flatten
 
 _DASHES = {"solid": "solid", "dashed": (0, (6, 4)), "dotted": (0, (1, 3)), "dashdot": (0, (6, 3, 1, 3))}
@@ -93,16 +94,19 @@ class MatplotlibRenderer(BaseModel):
 
     width: float = Field(12.0, gt=0)
     dpi: float = Field(150.0, gt=0)
+    height: Optional[float] = Field(
+        None, gt=0,
+        description="Output height, in inches like width. None follows the drawing's shape; "
+        "otherwise the output is exactly width × height, with the drawing scaled to fit and centred.",
+    )
     margin: float = Field(0.02, ge=0, description="Margin around the drawing, × drawing width.")
     background: Optional[str] = "white"
 
     def figure(self, element: Element) -> Figure:
         """Returns a matplotlib Figure with 'element' drawn on it."""
         leaves = flatten(element)
-        x0, y0, x1, y1 = element.bounds
-        pad = self.margin * max(x1 - x0, 1e-12)
-        x0, y0, x1, y1 = x0 - pad, y0 - pad, x1 + pad, y1 + pad
-        height = self.width * (y1 - y0) / (x1 - x0)
+        x0, y0, x1, y1 = frame(element.bounds, self.margin, self.aspect)
+        height = self.height or self.width * (y1 - y0) / (x1 - x0)
         fig = Figure(figsize=(self.width, height), dpi=self.dpi, facecolor=self.background or "none")
         FigureCanvasAgg(fig)
         ax = fig.add_axes((0, 0, 1, 1))
@@ -157,3 +161,8 @@ class MatplotlibRenderer(BaseModel):
         path = pathlib.Path(path)
         path.write_bytes(self.to_bytes(element, format=path.suffix.lstrip(".").lower() or "png"))
         return path
+
+    @property
+    def aspect(self) -> Optional[float]:
+        """Width / height of the output when 'height' is set, else None."""
+        return None if self.height is None else self.width / self.height

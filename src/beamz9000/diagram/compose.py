@@ -296,28 +296,73 @@ def dimensions(spec: BeamSpec, layout: Layout, top: float) -> Group:
     return group(parts, role="dimensions")
 
 
-def legend(spec: BeamSpec, layout: Layout, drawing: Bounds) -> Group:
-    """The legend keys, right of the drawing and aligned to its top."""
+def _legend_title(spec: BeamSpec, layout: Layout) -> str:
+    return layout.legend_title or (
+        "Load cases & occupancies" if any(k.kind == "occupancy" for k in spec.keys) else "Load cases"
+    )
+
+
+def _legend_key(spec: BeamSpec, layout: Layout, i: int, x: float, y: float) -> list:
+    """Key 'i' as a swatch and its name, with the swatch's left edge at x, centred on y."""
+    L = spec.length
+    fs = _font_size(layout, L)
+    s = layout.swatch_size * L
+    key, color = spec.keys[i], layout.color(i)
+    return [
+        Shape(geometry=glyphs.swatch(x, y - s / 2, s), fill_color=color, fill_opacity=0.6,
+              stroke_color=color, stroke_width=layout.stroke_width, z=Z_TEXT, key=key.name),
+        label(key.name, (x + s + 0.6 * fs, y), layout, L, ha="left", va="center", key=key.name),
+    ]
+
+
+def legend(spec: BeamSpec, layout: Layout, drawing: Bounds, position: str = "right") -> Group:
+    """
+    The legend keys. On the "right", a column aligned to the drawing's top. On
+    "top", rows above the drawing, starting at its left edge: the title, then
+    the keys, wrapping to a new row where a row would pass the drawing's right
+    edge.
+    """
     if not spec.keys:
         return group(role="legend")
+    if position == "top":
+        return _legend_top(spec, layout, drawing)
     L = spec.length
     fs = _font_size(layout, L)
     x = drawing[2] + layout.legend_gap * L
-    title = layout.legend_title or (
-        "Load cases & occupancies" if any(k.kind == "occupancy" for k in spec.keys) else "Load cases"
-    )
-    parts = [label(title, (x, drawing[3]), layout, L, ha="left", va="top")]
+    parts = [label(_legend_title(spec, layout), (x, drawing[3]), layout, L, ha="left", va="top")]
     pitch = layout.legend_row * fs
-    s = layout.swatch_size * L
     y = drawing[3] - pitch * 1.5
-    for i, key in enumerate(spec.keys):
-        color = layout.color(i)
-        parts += [
-            Shape(geometry=glyphs.swatch(x, y - s / 2, s), fill_color=color, fill_opacity=0.6,
-                  stroke_color=color, stroke_width=layout.stroke_width, z=Z_TEXT, key=key.name),
-            label(key.name, (x + s + 0.6 * fs, y), layout, L, ha="left", va="center", key=key.name),
-        ]
+    for i in range(len(spec.keys)):
+        parts += _legend_key(spec, layout, i, x, y)
         y -= pitch
+    return group(parts, role="legend")
+
+
+def _legend_top(spec: BeamSpec, layout: Layout, drawing: Bounds) -> Group:
+    L = spec.length
+    fs = _font_size(layout, L)
+    gap = layout.legend_item_gap * fs
+    left, right = drawing[0], max(drawing[2], drawing[0])
+    title = label(_legend_title(spec, layout), (0, 0), layout, L, ha="left", va="center")
+    items = [[title]] + [_legend_key(spec, layout, i, 0, 0) for i in range(len(spec.keys))]
+
+    rows: list[list[list]] = [[]]
+    x = left
+    for item in items:
+        width = group(item).bounds[2]
+        if rows[-1] and x + width > right:
+            rows.append([])
+            x = left
+        rows[-1].append(translate(group(item), dx=x))
+        x += width + gap
+
+    # Rows from the bottom up, so the lowest sits 'legend_top_gap' above the drawing.
+    pitch = layout.legend_row * fs
+    parts = []
+    y = drawing[3] + layout.legend_top_gap * L + layout.swatch_size * L / 2
+    for row in reversed(rows):
+        parts += [translate(item, dy=y) for item in row]
+        y += pitch
     return group(parts, role="legend")
 
 
@@ -346,14 +391,94 @@ def as_spec(obj, beam_id: Optional[str] = None) -> BeamSpec:
     raise TypeError(f"cannot draw a {type(obj).__name__}")
 
 
-def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = None) -> Group:
+def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = None,
+                 aspect: Optional[float] = None, margin: float = 0.02) -> Group:
     """
     Returns the free-body diagram of a beam as one Group: load bands above the
-    beam, supports and node labels, dimensions below, and the legend to the right. 'obj' is
+    beam, supports and node labels, dimensions below, and the legend. 'obj' is
     anything `as_spec` accepts.
+
+    With 'aspect' (target width / height), the diagram is arranged to fill a
+    box of that shape as fully as it can. The vertical proportions are
+    stretched within `layout.stretch` toward the target shape and, with
+    `legend_position="auto"`, the legend goes on top when that leaves the
+    diagram larger than a legend on the right. 'margin' is the renderer's
+    margin (× drawing width), counted in the fit.
     """
     spec = as_spec(obj, beam_id)
     layout = layout or Layout()
+    if aspect is None:
+        position = "top" if layout.legend_position == "top" else "right"
+        return _compose(spec, layout, position)
+    if aspect <= 0:
+        raise ValueError(f"aspect must be positive, got {aspect}")
+    if layout.legend and spec.keys and layout.legend_position == "auto":
+        positions = ["right", "top"]
+    else:
+        positions = ["top" if layout.legend_position == "top" else "right"]
+    # The larger the fitted scale, the larger the drawing (and its text) in the
+    # box. The first position wins ties, so "right" is kept unless "top" is
+    # clearly better.
+    best_scale, best = _fit(spec, layout, positions[0], aspect, margin)
+    for position in positions[1:]:
+        scale, diagram = _fit(spec, layout, position, aspect, margin)
+        if scale > best_scale * 1.01:
+            best_scale, best = scale, diagram
+    return best
+
+
+def fitted_scale(bounds: Bounds, aspect: float, margin: float = 0.02) -> float:
+    """
+    Returns the scale at which 'bounds', with 'margin' × its width on every
+    side, fits a box 'aspect' wide and 1 high.
+    """
+    w, h = bounds[2] - bounds[0], bounds[3] - bounds[1]
+    pad = 2 * margin * w
+    return min(aspect / (w + pad), 1 / (h + pad))
+
+
+def _fit(spec: BeamSpec, layout: Layout, position: str, aspect: float, margin: float):
+    """
+    Returns (fitted scale, diagram) for the stretch, within `layout.stretch`,
+    that brings the diagram's shape closest to 'aspect'. Taller is lower
+    width / height, and stretching only makes a diagram taller, so the
+    search is a bracketed root find on the shape.
+    """
+    def build(f: float):
+        diagram = _compose(spec, layout.stretched(f), position)
+        return _shape(diagram.bounds, margin) - aspect, diagram
+
+    lo, hi = layout.stretch
+    g_lo, d_lo = build(lo)
+    if g_lo <= 0 or lo == hi:  # Too tall even at the least stretch.
+        return fitted_scale(d_lo.bounds, aspect, margin), d_lo
+    g_hi, d_hi = build(hi)
+    if g_hi >= 0:  # Too wide even at the most stretch.
+        return fitted_scale(d_hi.bounds, aspect, margin), d_hi
+    best = d_lo
+    for _ in range(12):
+        # Regula falsi with the Illinois tweak: the shape is close to linear in f.
+        f = hi - g_hi * (hi - lo) / (g_hi - g_lo)
+        g, best = build(f)
+        if abs(g) <= 0.005 * aspect:
+            break
+        if g > 0:
+            lo, g_lo = f, g
+            g_hi /= 2
+        else:
+            hi, g_hi = f, g
+            g_lo /= 2
+    return fitted_scale(best.bounds, aspect, margin), best
+
+
+def _shape(bounds: Bounds, margin: float) -> float:
+    """Width / height of 'bounds' with the renderer's margin added."""
+    w, h = bounds[2] - bounds[0], bounds[3] - bounds[1]
+    pad = 2 * margin * w
+    return (w + pad) / (h + pad)
+
+
+def _compose(spec: BeamSpec, layout: Layout, position: str) -> Group:
     beam = beam_line(spec, layout)
     sup = supports(spec, layout)
     labels = node_labels(spec, layout, sup)
@@ -361,8 +486,7 @@ def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = 
     below = [g.bounds[1] for g in (sup, labels) if len(g)]
     lowest = min([*below, -_half_depth(spec)])
     dims = dimensions(spec, layout, top=lowest)
-    body = group(loads, beam, sup, labels, dims)
     parts = [loads, beam, sup, labels, dims]
     if layout.legend:
-        parts.append(legend(spec, layout, body.bounds))
+        parts.append(legend(spec, layout, group(parts).bounds, position))
     return group(parts, role="diagram")

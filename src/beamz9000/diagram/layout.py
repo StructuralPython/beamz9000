@@ -8,7 +8,9 @@ widths are in points, like every renderer's line weights.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Okabe-Ito: a colour-blind-safe qualitative palette.
 OKABE_ITO = [
@@ -21,6 +23,11 @@ OKABE_ITO = [
     "#F0E442",  # yellow
     "#000000",  # black
 ]
+
+
+# The proportions a fit stretches to change a diagram's aspect ratio: the load
+# strata only, so supports, dimensions and text keep their spacing.
+VERTICAL_FIELDS = ("point_height", "line_height", "beam_clearance", "band_gap", "row_gap")
 
 
 class Layout(BaseModel):
@@ -67,10 +74,38 @@ class Layout(BaseModel):
 
     # Legend
     legend: bool = True
-    legend_gap: float = Field(0.05, description="Gap between the drawing and the legend.")
+    legend_position: Literal["auto", "right", "top"] = Field(
+        "auto",
+        description="Where the legend goes. 'auto' puts it on the right, unless the diagram "
+        "is fitted to a target aspect ratio and it fits better on top.",
+    )
+    legend_gap: float = Field(0.05, description="Gap between the drawing and a legend on the right.")
+    legend_top_gap: float = Field(0.03, description="Gap between the drawing and a legend on top.")
+    legend_item_gap: float = Field(1.5, description="Gap between legend items in a row on top, in em.")
     swatch_size: float = 0.022
     legend_row: float = Field(1.8, description="Legend row pitch, in em.")
     legend_title: str | None = Field(None, description="Title; chosen from the keys if None.")
+
+    # Fitting to a target aspect ratio
+    stretch: tuple[float, float] = Field(
+        (0.6, 2.0),
+        description="Range of factors a fit may apply to the load strata (load heights "
+        "and the gaps between bands and rows) to match a target aspect ratio. "
+        "(1, 1) turns stretching off.",
+    )
+
+    @model_validator(mode="after")
+    def _check_stretch(self):
+        lo, hi = self.stretch
+        if not 0 < lo <= 1 <= hi:
+            raise ValueError("`stretch` must be (low, high) with 0 < low <= 1 <= high")
+        return self
+
+    def stretched(self, factor: float) -> "Layout":
+        """Returns this layout with its vertical proportions × 'factor'. Text is unchanged."""
+        if factor == 1:
+            return self
+        return self.model_copy(update={k: getattr(self, k) * factor for k in VERTICAL_FIELDS})
 
     def color(self, index: int) -> str:
         return self.palette[index % len(self.palette)]
