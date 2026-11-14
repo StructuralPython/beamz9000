@@ -86,6 +86,7 @@ html_theme_options = {
         {"title": "Get started", "url": "getting-started"},
         {"title": "Scheme format", "url": "scheme"},
         {"title": "Gallery", "url": "gallery"},
+        {"title": "ymprint", "url": "ymprint"},
         {"title": "API", "url": "api/index"},
     ],
     "show_ai_links": False,

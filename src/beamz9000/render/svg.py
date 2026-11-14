@@ -214,3 +214,8 @@ class SVGRenderer(BaseModel):
     def aspect(self) -> Optional[float]:
         """Width / height of the output when 'height' is set, else None."""
         return None if self.height is None else self.width / self.height
+
+    @property
+    def width_pt(self) -> float:
+        """The output width in points ('width' is in CSS pixels (1 px = 0.75 pt))."""
+        return self.width * 0.75

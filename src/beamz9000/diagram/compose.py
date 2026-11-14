@@ -28,6 +28,7 @@ from typing import Optional
 from beamz9000.diagram.layout import Layout
 from beamz9000.graphics import glyphs
 from beamz9000.graphics.elements import Group, Shape, Text, group, translate
+from beamz9000.render.frame import frame
 from beamz9000.spec import BeamSpec, SpecLoad, from_scheme
 
 Bounds = tuple[float, float, float, float]
@@ -121,7 +122,8 @@ def supports(spec: BeamSpec, layout: Layout) -> Group:
     """
     A support glyph at each supported node, hanging from the beam's underside;
     free ends get nothing. A fixed end becomes a wall at the beam's end, sized
-    to cover the beam's depth. A spring with a stiffness is labelled beside it.
+    to cover the beam's depth. A spring with a stiffness is labelled beside it,
+    or under it when there is no room beside it.
     """
     L = spec.length
     gw = layout.glyph_width * L
@@ -145,12 +147,30 @@ def supports(spec: BeamSpec, layout: Layout) -> Group:
                   stroke_width=layout.stroke_width, z=Z_SUPPORT),
         ]
         if k_label:
-            fs = _font_size(layout, L)
-            x_right = max(it.bounds[2] for it in items if not it.is_empty)
-            items.append(label(k_label, (x_right + layout.label_gap * fs, anchor[1] - glyphs.support_height(size) / 2),
-                               layout, L, ha="left", va="center"))
+            items.append(_stiffness_label(spec, layout, idx, k_label, group(items).bounds))
         parts.append(group(items, role="support"))
     return group(parts, role="supports")
+
+
+def _stiffness_label(spec: BeamSpec, layout: Layout, idx: int, text: str, glyph: Bounds) -> Text:
+    """
+    A spring's stiffness label: right of its glyph if that clears the next
+    support, else left of it if that clears the previous one, else under it.
+    """
+    L = spec.length
+    gap = layout.label_gap * _font_size(layout, L)
+    half = layout.glyph_width * L / 2
+    others = [x for i, (x, k) in enumerate(zip(spec.nodes, spec.supports)) if k != "free" and i != idx]
+    right_limit = min((x - half - gap for x in others if x > spec.nodes[idx]), default=math.inf)
+    left_limit = max((x + half + gap for x in others if x < spec.nodes[idx]), default=-math.inf)
+    y = (glyph[1] + glyph[3]) / 2 if glyph[3] <= -_half_depth(spec) + 1e-9 else glyph[1] + (glyph[3] - glyph[1]) / 4
+    right = label(text, (glyph[2] + gap, y), layout, L, ha="left", va="center")
+    if right.bounds[2] <= right_limit:
+        return right
+    left = label(text, (glyph[0] - gap, y), layout, L, ha="right", va="center")
+    if left.bounds[0] >= left_limit:
+        return left
+    return label(text, (spec.nodes[idx], glyph[1] - gap), layout, L, va="top")
 
 
 def node_labels(spec: BeamSpec, layout: Layout, supports_group: Group) -> Group:
@@ -161,8 +181,9 @@ def node_labels(spec: BeamSpec, layout: Layout, supports_group: Group) -> Group:
     by_node: dict[int, float] = {}
     supported = [i for i, k in enumerate(spec.supports) if k != "free"]
     for i, sup in zip(supported, supports_group.children):
-        shapes = [c for c in sup.children if isinstance(c, Shape) and not c.is_empty]
-        by_node[i] = min(c.bounds[1] for c in shapes)
+        # Glyphs and any stiffness label placed under them.
+        parts = [c for c in sup.children if not (isinstance(c, Shape) and c.is_empty)]
+        by_node[i] = min(c.bounds[1] for c in parts)
     # All labels share one line, under the lowest support.
     bottom = min([*by_node.values(), -_half_depth(spec)])
     parts = [
@@ -189,7 +210,8 @@ def load_item(load: SpecLoad, scale: _Scale, color: str, layout: Layout) -> Grou
     parts: list = []
 
     if load.kind == "point":
-        h = scale.point(load.mag1)
+        # Never shorter than two arrowheads, so a squeezed arrow keeps a shaft.
+        h = max(scale.point(load.mag1), 2 * hl)
         # The end away from the base, tilted counter-clockwise by 'angle' about the base.
         a = math.radians(load.angle)
         far = (load.x1 - h * math.sin(a), h * math.cos(a))
@@ -287,13 +309,32 @@ def dimensions(spec: BeamSpec, layout: Layout, top: float) -> Group:
     style = dict(stroke_color=layout.ink, stroke_width=layout.dimension_stroke_width, z=Z_DIMENSION)
     y = top - layout.dimension_gap * L - fs
     parts = [Shape(geometry=glyphs.dimension_line(spec.nodes, y, tick), **style)]
-    for (a, b), text in zip(zip(spec.nodes, spec.nodes[1:]), spec.span_labels):
-        parts.append(label(text, ((a + b) / 2, y + gap), layout, L))
+    last = len(spec.spans) - 1
+    for i, ((a, b), text) in enumerate(zip(zip(spec.nodes, spec.nodes[1:]), spec.span_labels)):
+        parts.append(_span_label(text, a, b, y, i == 0, i == last, layout, L))
     if len(spec.spans) > 1:
         y -= layout.dimension_spacing * L
         parts.append(Shape(geometry=glyphs.dimension_line([spec.nodes[0], spec.nodes[-1]], y, tick), **style))
         parts.append(label(spec.length_label, ((spec.nodes[0] + spec.nodes[-1]) / 2, y + gap), layout, L))
     return group(parts, role="dimensions")
+
+
+def _span_label(text: str, a: float, b: float, y: float, first: bool, last: bool,
+                layout: Layout, L: float) -> Text:
+    """
+    A span's dimension: centred above its line, or, when it is wider than the
+    span, beyond the line's end (end spans) or under the line (inner spans).
+    """
+    gap = layout.label_gap * _font_size(layout, L)
+    above = label(text, ((a + b) / 2, y + gap), layout, L)
+    width = above.bounds[2] - above.bounds[0]
+    if width <= (b - a) - 2 * gap or (first and last):
+        return above
+    if last:
+        return label(text, (b + gap, y + gap), layout, L, ha="left")
+    if first:
+        return label(text, (a - gap, y + gap), layout, L, ha="right")
+    return label(text, ((a + b) / 2, y - gap), layout, L, va="top")
 
 
 def _legend_title(spec: BeamSpec, layout: Layout) -> str:
@@ -392,7 +433,8 @@ def as_spec(obj, beam_id: Optional[str] = None) -> BeamSpec:
 
 
 def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = None,
-                 aspect: Optional[float] = None, margin: float = 0.02) -> Group:
+                 aspect: Optional[float] = None, margin: float = 0.02,
+                 width: Optional[float] = None) -> Group:
     """
     Returns the free-body diagram of a beam as one Group: load bands above the
     beam, supports and node labels, dimensions below, and the legend. 'obj' is
@@ -404,9 +446,35 @@ def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = 
     `legend_position="auto"`, the legend goes on top when that leaves the
     diagram larger than a legend on the right. 'margin' is the renderer's
     margin (× drawing width), counted in the fit.
+
+    'width' is the output width in points. With it and `layout.font_size_pt`,
+    the text is sized in points: the diagram is arranged again until its text
+    comes out at that size in the output. Symbols (supports, arrowheads,
+    legend swatches) scale with the text.
     """
     spec = as_spec(obj, beam_id)
     layout = layout or Layout()
+    if width is None or layout.font_size_pt is None:
+        return _arrange(spec, layout, aspect, margin)
+    if width <= 0:
+        raise ValueError(f"width must be positive, got {width}")
+    # The text's size in the output depends on the drawing's extent, which
+    # depends on the text (labels, legend). A few fixed-point steps settle it.
+    # Symbols (supports, arrowheads, swatches) scale with the text.
+    factor = 1.0
+    for _ in range(8):
+        scaled = layout.text_scaled(factor)
+        diagram = _arrange(spec, scaled, aspect, margin)
+        x0, _, x1, _ = frame(diagram.bounds, margin, aspect)
+        points = scaled.font_size * spec.length * width / (x1 - x0)
+        if abs(points - layout.font_size_pt) <= 0.005 * layout.font_size_pt:
+            break
+        factor *= layout.font_size_pt / points
+    return diagram
+
+
+def _arrange(spec: BeamSpec, layout: Layout, aspect: Optional[float], margin: float) -> Group:
+    """The diagram for 'layout', fitted to 'aspect' if given."""
     if aspect is None:
         position = "top" if layout.legend_position == "top" else "right"
         return _compose(spec, layout, position)

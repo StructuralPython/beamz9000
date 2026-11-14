@@ -59,6 +59,7 @@ getting-started
 scheme
 gallery
 customizing
+ymprint
 architecture
 ```
 

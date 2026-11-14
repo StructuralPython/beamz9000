@@ -8,7 +8,7 @@ widths are in points, like every renderer's line weights.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -29,6 +29,10 @@ OKABE_ITO = [
 # strata only, so supports, dimensions and text keep their spacing.
 VERTICAL_FIELDS = ("point_height", "line_height", "beam_clearance", "band_gap", "row_gap")
 
+# Symbols that are sized like text: when text is sized in points, they scale
+# with it, so a support or a legend swatch keeps its size next to a label.
+SYMBOL_FIELDS = ("glyph_width", "head_length", "head_width", "moment_radius", "swatch_size", "tick_size")
+
 
 class Layout(BaseModel):
     """Proportions and styles of a beam diagram. All lengths are × beam length."""
@@ -37,7 +41,13 @@ class Layout(BaseModel):
 
     # Text
     font_family: str = "DejaVu Sans"
-    font_size: float = 0.018
+    font_size: float = Field(0.018, description="Text height, × beam length.")
+    font_size_pt: Optional[float] = Field(
+        None, gt=0,
+        description="Text height in points. Used instead of font_size when the output "
+        "width is known (draw(), or beam_diagram(width=...)), so text is the same size "
+        "whatever the beam's length or the box's shape.",
+    )
     label_gap: float = Field(0.25, description="Gap between a glyph and its label, in em.")
 
     # Beam and supports
@@ -106,6 +116,11 @@ class Layout(BaseModel):
         if factor == 1:
             return self
         return self.model_copy(update={k: getattr(self, k) * factor for k in VERTICAL_FIELDS})
+
+    def text_scaled(self, factor: float) -> "Layout":
+        """Returns this layout with its text and symbols × 'factor'."""
+        update = {k: getattr(self, k) * factor for k in ("font_size", *SYMBOL_FIELDS)}
+        return self.model_copy(update=update)
 
     def color(self, index: int) -> str:
         return self.palette[index % len(self.palette)]

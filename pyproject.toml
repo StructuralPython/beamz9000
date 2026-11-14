@@ -18,6 +18,14 @@ dependencies = [
 Home = "https://github.com/StructuralPython/beamz9000"
 Documentation = "https://beamz9000.structuralpython.com"
 
+[project.optional-dependencies]
+reportlab = [
+    "reportlab>=4.2",
+]
+ymprint = [
+    "ymprint>=0.11.3 ; python_full_version >= '3.14'",
+]
+
 [build-system]
 requires = ["uv_build>=0.9.14,<0.12"]
 build-backend = "uv_build"
@@ -26,6 +34,8 @@ build-backend = "uv_build"
 dev = [
     "ipykernel>=7.1.0",
     "pytest>=8.3",
+    "reportlab>=4.2",
+    "ymprint>=0.11.3 ; python_full_version >= '3.14'",
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
