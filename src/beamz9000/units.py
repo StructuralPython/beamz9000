@@ -107,7 +107,7 @@ def label(value: Value, precision: int = 3) -> str:
     2.500 kN/m -> "2.5 kN/m", 4500.000 mm -> "4500 mm", 2500.0 -> "2500".
     """
     if isinstance(value, Physical):
-        text = str(value.round(precision))
+        text = str(round(value, precision))
         number, _, unit = text.partition(" ")
         return f"{_trim(number)} {unit}".strip()
     return _trim(f"{float(value):.{precision}f}")
