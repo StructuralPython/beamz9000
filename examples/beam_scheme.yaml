@@ -38,12 +38,19 @@ B1:
         D: 1.5 kPa
         L: 1.9 kPa
   load_combos:
-    - ULS1:
-        name: D
-        factor: 1.4
-    - ULS2:
-        D: 1.25
-        L: 1.5
+    forces:  # reactions, shear and moment
+      - ULS1:
+          name: D
+          factor: 1.4
+      - ULS2:
+          D: 1.25
+          L: 1.5
+    deflections:  # deflection and rotation
+      - SLS1:
+          D: 1.0
+          L: 1.0
+      - SLS2:
+          L: 1.0
   results:
     diagrams:
       - moment

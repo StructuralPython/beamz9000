@@ -24,7 +24,8 @@ def test_example_resolves():
         ("point", 5.75), ("point", 6.5), ("line", 0.0), ("line", 1.0),
         ("line", 4.5), ("line", 4.5), ("moment", 0.0),
     ]
-    assert b.load_combos.forces == b.load_combos.deflections == {"ULS1": {"D": 1.4}, "ULS2": {"D": 1.25, "L": 1.5}}
+    assert b.load_combos.forces == {"ULS1": {"D": 1.4}, "ULS2": {"D": 1.25, "L": 1.5}}
+    assert b.load_combos.deflections == {"SLS1": {"D": 1.0, "L": 1.0}, "SLS2": {"L": 1.0}}
     assert b.results.diagrams == ["moment", "shear", "deflection"]
     assert b.results.reactions
     assert units.si(b.stiffness) == pytest.approx(200e9 * 300e-6)

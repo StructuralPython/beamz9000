@@ -178,8 +178,15 @@ def test_diagram_strata_with_results():
     assert parts["reactions"].bounds[3] < parts["supports"].bounds[1]
     assert parts["dimensions"].bounds[3] < parts["reactions"].bounds[1]
     assert parts["results"].bounds[3] < parts["dimensions"].bounds[1]
-    titles = [t.text for t in flatten(parts["results"]) if isinstance(t, Text) and t.ha == "right"]
-    assert titles == ["Shear", "Moment", "Deflection"]
+    texts = [[t for t in flatten(panel) if isinstance(t, Text)] for panel in parts["results"].children]
+    assert [panel[0].text for panel in texts] == ["Shear", "Moment", "Deflection"]
+    # Titles and peak values sit above each panel, within the beam's length.
+    beam = parts["beam"].bounds
+    for panel, ts in zip(parts["results"].children, texts):
+        shapes = [s for s in flatten(panel) if not isinstance(s, Text)]
+        assert min(t.bounds[1] for t in ts) > max(s.bounds[3] for s in shapes)
+        assert min(t.bounds[0] for t in ts) >= beam[0] - 1e-9
+        assert max(t.bounds[2] for t in ts) <= beam[2] + 1e-9
 
 
 @pytest.mark.parametrize("tension_side, below", [(True, True), (False, False)])
