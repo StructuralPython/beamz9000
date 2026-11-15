@@ -121,3 +121,17 @@ def test_draw_fits_to_the_renderer(tmp_path):
     path = bz.draw(EXAMPLES / "beam_scheme.yaml", tmp_path / "f.png",
                    renderer=bz.MatplotlibRenderer(width=4, height=4, dpi=50))
     assert mpimg.imread(path).shape[:2] == (200, 200)
+
+
+@pytest.mark.parametrize("width", [300.0, 451.0, 900.0])
+def test_overall_dimension_clears_span_labels(width):
+    """Large text on a long beam: the overall dimension sits below the span row and its labels."""
+    from beamz9000.graphics.elements import Shape, Text, flatten
+
+    diagram = bz.beam_diagram(EXAMPLES / "gallery.yaml", bz.Layout(font_size_pt=8), "floor_beam",
+                              aspect=width / 127.6, width=width)
+    texts = [t for t in flatten(_part(diagram, "dimensions")) if isinstance(t, Text)]
+    overall = next(t for t in texts if t.text == "12.6 m")
+    spans = [t for t in texts if t is not overall]
+    span_line = next(s for s in flatten(_part(diagram, "dimensions")) if isinstance(s, Shape))
+    assert overall.bounds[3] < min(span_line.bounds[1], *(t.bounds[1] for t in spans))
