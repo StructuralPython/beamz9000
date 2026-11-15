@@ -172,9 +172,11 @@ diagram into any ReportLab document as vector graphics with searchable text.
   plain mapping.
 - A combination is `{name: D, factor: 1.4}`, a list of those, or
   `{D: 1.25, L: 1.5}`.
-- `results.diagrams` lists any of `moment`, `shear`, `deflection`, `rotation`.
-  Deflection and rotation need `e` and `i` (or `ei`). Without them they are
-  skipped, with a warning.
+- `results` analyses the beam with pycba-tools or pynite-tools (the `pycba`
+  and `pynite` extras): list any of `forces`, `shear`, `moment`,
+  `deflection(s)`, `rotation(s)`, or write `{diagrams: [...], engine: pynite}`.
+  The diagram then shows each support's reactions per load case, and the
+  result diagrams below, with positive moment on the tension side.
 
 ### Validation
 

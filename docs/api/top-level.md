@@ -13,3 +13,5 @@ The package also re-exports {func}`~beamz9000.scheme.load_scheme`,
 {class}`~beamz9000.graphics.elements.Shape`,
 {class}`~beamz9000.graphics.elements.Text` and
 {class}`~beamz9000.graphics.elements.Group` elements, and both renderers.
+
+Analysis lives in {mod}`beamz9000.analysis`.

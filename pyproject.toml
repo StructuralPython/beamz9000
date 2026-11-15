@@ -52,6 +52,8 @@ dev = [
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
+    "pycba-tools>=0.1.0",
+    "pynite-tools>=0.8.1",
     "myst-parser>=5.2.0",
     "shibuya>=2026.7.12",
     "sphinx>=9.1.1",

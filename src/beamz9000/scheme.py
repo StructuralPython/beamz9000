@@ -327,8 +327,9 @@ class Results(_Model):
         description="Diagrams to draw below the beam: forces (shear and moment), shear, "
         "moment, deflection(s), rotation(s).",
     )
-    engine: Literal["auto", "pycba", "pynite"] = Field(
-        "auto", description="Analysis engine; 'auto' uses pycba-tools if installed, else pynite-tools."
+    engine: Literal["pycba", "pynite", "auto"] = Field(
+        "pycba", description="Analysis engine: pycba (the default, through pycba-tools), pynite "
+        "(through pynite-tools), or auto (pycba if installed, else pynite).",
     )
     combos: Optional[list[str]] = Field(
         None, description="Combinations to show; all of them if not given."

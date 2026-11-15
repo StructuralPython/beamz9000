@@ -107,9 +107,9 @@ supports:
   plain mapping.
 - A combination is `{name: D, factor: 1.4}`, a list of those, or
   `{D: 1.25, L: 1.5}`.
-- `results.diagrams` lists any of `moment`, `shear`, `deflection`, `rotation`.
-  Deflection and rotation need `e` and `i` (or `ei`). Without them they are
-  skipped, with a warning.
+- `results` analyses the beam: list any of `forces`, `shear`, `moment`,
+  `deflection(s)`, `rotation(s)`, or write `{diagrams: [...], engine: pynite}`.
+  See {doc}`analysis`.
 
 ## Validation
 

@@ -113,6 +113,8 @@ dev = [
 docs = [
     { name = "autodoc-pydantic" },
     { name = "myst-parser" },
+    { name = "pycba-tools" },
+    { name = "pynite-tools" },
     { name = "shibuya" },
     { name = "sphinx", version = "9.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
     { name = "sphinx", version = "9.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
@@ -146,6 +148,8 @@ dev = [
 docs = [
     { name = "autodoc-pydantic", specifier = ">=2.2.0" },
     { name = "myst-parser", specifier = ">=5.2.0" },
+    { name = "pycba-tools", specifier = ">=0.1.0" },
+    { name = "pynite-tools", specifier = ">=0.8.1" },
     { name = "shibuya", specifier = ">=2026.7.12" },
     { name = "sphinx", specifier = ">=9.1.1" },
     { name = "sphinx-copybutton", specifier = ">=0.5.2" },

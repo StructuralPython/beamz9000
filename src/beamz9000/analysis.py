@@ -1,6 +1,6 @@
 """
-Analyses a scheme Beam with pycba (through pycba-tools) or PyniteFEA (through
-pynite-tools), one load case at a time.
+Analyses a scheme Beam with pycba (through pycba-tools, the default) or
+PyniteFEA (through pynite-tools), one load case at a time.
 
 Both engines go through their tools package, which share one interface: the
 model is written in the package's JSON schema (`model_dict`) and built with
@@ -115,8 +115,12 @@ def available_engines() -> list[str]:
     return found
 
 
-def resolve_engine(engine: Engine = "auto") -> str:
-    """Returns the engine to use, or raises ImportError naming the extra to install."""
+def resolve_engine(engine: Engine = "pycba") -> str:
+    """
+    Returns the engine to use, or raises ImportError naming the extra to
+    install. pycba is the default; 'auto' falls back to pynite when
+    pycba-tools is not installed.
+    """
     installed = available_engines()
     if engine == "auto":
         if not installed:
@@ -131,7 +135,7 @@ def resolve_engine(engine: Engine = "auto") -> str:
     return engine
 
 
-def analyze(beam: Beam, quantities: Optional[list[str]] = None, engine: Engine = "auto") -> AnalysisResult:
+def analyze(beam: Beam, quantities: Optional[list[str]] = None, engine: Engine = "pycba") -> AnalysisResult:
     """
     Analyses 'beam' for each of its load cases and returns the reactions and
     the curves for 'quantities' (any of shear, moment, deflection, rotation).
@@ -156,7 +160,7 @@ def analyze(beam: Beam, quantities: Optional[list[str]] = None, engine: Engine =
     return AnalysisResult(engine=engine, cases=inputs.cases, reactions=reactions, curves=curves)
 
 
-def build_model(beam: Beam, engine: Engine = "auto"):
+def build_model(beam: Beam, engine: Engine = "pycba"):
     """
     Returns the analysed model of 'beam': a pycba-tools CBAModel or a Pynite
     FEModel3D, built with its tools package's `load_dict`. Each load case has
@@ -175,7 +179,7 @@ def build_model(beam: Beam, engine: Engine = "auto"):
     return model
 
 
-def model_dict(beam: Beam, engine: Engine = "auto") -> dict:
+def model_dict(beam: Beam, engine: Engine = "pycba") -> dict:
     """
     Returns 'beam' as an analysis-ready model in the JSON schema of the
     engine's tools package (pycba-tools' CBAModel or pynite-tools'

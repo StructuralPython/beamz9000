@@ -131,9 +131,15 @@ def test_deflection_needs_ei_and_is_skipped_without_it():
 def test_missing_engine_warns_and_draws_without_results(monkeypatch):
     monkeypatch.setattr(analysis, "available_engines", lambda: [])
     beam = _beam(loads=[{"dist": {"w": "2 kN/m", "case": "D"}}], results=["forces"])
-    with pytest.warns(UserWarning, match="pycba-tools or pynite-tools"):
+    with pytest.warns(UserWarning, match=r"needs pycba-tools.*beamz9000\[pycba\]"):
         spec = from_scheme(beam)
     assert spec.reactions == []
+
+
+def test_pycba_is_the_default_engine():
+    beam = _beam(loads=[{"dist": {"w": "2 kN/m", "case": "D"}}], results=["forces"])
+    assert beam.results.engine == "pycba"
+    assert analysis.analyze(beam).engine == "pycba"
 
 
 def test_named_engine_must_be_installed(monkeypatch):

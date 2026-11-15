@@ -42,6 +42,9 @@ bz.draw("beams.yaml", "B1.svg")
   Labels show the units you wrote.
 - **Helpful validation.** Errors name the load and the problem: `load 3
   (dist): it must end after it starts`.
+- **Analysis built in.** List `results: [forces, deflections]` and the beam is
+  analysed with pycba or PyniteFEA: reactions under every support for each
+  load case, and shear, moment, deflection and rotation diagrams below.
 - **Diagrams that read the same every time.** Loads are drawn in bands per load
   case or occupancy, above the beam, then the supports and the dimensions, with
   a colour-blind-safe legend.
@@ -58,6 +61,7 @@ bz.draw("beams.yaml", "B1.svg")
 getting-started
 scheme
 gallery
+analysis
 customizing
 ymprint
 architecture
