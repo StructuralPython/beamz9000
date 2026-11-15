@@ -198,6 +198,8 @@ uv run pytest
 uv run --group docs sphinx-build -b html docs docs/_build/html   # docs
 ```
 
-The docs are built and deployed to bunny.net by `.github/workflows/docs.yml`
-on every push to `main`. Pull requests build them (with warnings as errors)
-without deploying.
+Tests run on every push and pull request (`.github/workflows/tests.yml`). The docs
+are built on pull requests and deployed to bunny.net on every push to `main`
+(`.github/workflows/publish-docs-to-bunny.yml`). Publishing a GitHub release
+uploads the package to PyPI (`.github/workflows/publish.yml`); the release tag
+must match the version in `pyproject.toml`.

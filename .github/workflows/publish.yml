@@ -1,0 +1,55 @@
+# Builds beamz9000 and uploads it to PyPI when a GitHub release is published.
+# Uses PyPI trusted publishing (OIDC), so no API token is stored in the repository:
+# https://docs.pypi.org/trusted-publishers/
+
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - name: Check the release tag matches the version
+        # A release tagged v0.2.0 (or 0.2.0) must publish version 0.2.0.
+        run: |
+          version=$(uv version --short)
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Release tag $GITHUB_REF_NAME does not match the package version $version"
+            exit 1
+          fi
+      - name: Test
+        run: uv run --locked pytest -q
+      - name: Build
+        run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # Must match the environment named in the PyPI trusted publisher.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/beamz9000/
+    permissions:
+      # Lets the job request the OIDC token that PyPI exchanges for an upload token.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
