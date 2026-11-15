@@ -14,21 +14,17 @@ A three-span beam with a rotational spring, a vertical spring, angled point
 loads and a drawn depth, from `examples/drawing_features.yaml`.
 ```
 
-```yaml
-_environment: structural
-
-B1:
-  spans: [4500 mm, 2500 mm]
-  cantilever: right
-  loads:
-    - dist: {w: 2.5 kN/m, case: D}
-    - point: {p: 15 kN, span_loc: [1, 1250 mm], case: L}
+```{literalinclude} ../examples/drawing_features.yaml
+:language: yaml
+:start-at: "B2:"
+:end-before: "B3:"
+:prepend: "_environment: structural\n"
 ```
 
 ```python
 import beamz9000 as bz
 
-bz.draw("beams.yaml", "B1.svg")
+bz.draw("drawing_features.yaml", "B2.svg", beam_id="B2")
 ```
 
 ## What you get
