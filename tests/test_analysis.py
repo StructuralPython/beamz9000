@@ -161,7 +161,9 @@ def test_spec_labels_use_the_schemes_units():
     labels = {r.key: r.label for r in spec.reactions}
     assert labels == {"D": "↑ 12 kN  ↺ 18 kN·m", "L": "↑ 8.66 kN  ← 5 kN  ↺ 26 kN·m"}
     moment = next(d for d in spec.diagrams if d.kind == "moment")
-    assert {p.label for p in moment.peaks} == {"−18 kN·m", "−26 kN·m"}
+    # Each case lists its max and min, even the cantilever tip's zero.
+    assert sorted((p.key, p.label) for p in moment.peaks) == [
+        ("D", "0 kN·m"), ("D", "−18 kN·m"), ("L", "0 kN·m"), ("L", "−26 kN·m")]
 
 
 def test_occupancy_cases_join_the_legend():
@@ -291,3 +293,11 @@ def test_engines_agree_on_envelopes():
         assert np.max(np.abs(np.subtract(ea.min, eb.min))) <= 2e-3 * scale
     for ra, rb in zip(a.reaction_envelopes(), b.reaction_envelopes()):
         assert ra.fy == pytest.approx(rb.fy, abs=1e-6)
+
+
+def test_envelopes_always_list_max_and_min():
+    # The starter example's moment envelope barely sags, but still lists a max.
+    spec = bz.from_scheme(bz.load_scheme(EXAMPLES / "beam_scheme.yaml")["B1"])
+    for d in spec.diagrams:
+        assert d.envelope
+        assert sorted(p.role for p in d.peaks) == ["max", "min"]
