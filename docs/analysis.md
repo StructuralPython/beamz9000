@@ -123,7 +123,7 @@ load_combos:              # or one set per group of results
 - Each diagram's title and peak values sit in a row above it, within the
   beam's length, so they don't widen the drawing. Each case's peaks are marked
   with dots and listed in its colour as `max / min`. An envelope lists its
-  `max` and `min`.
+  `max` and `min`. Both are always listed, even when one is small or zero.
 
 Results are given in the units the scheme uses: a beam loaded in kN gets
 reactions in kN, moments in kN·m and deflections in mm.

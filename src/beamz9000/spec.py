@@ -277,6 +277,11 @@ def _reactions(result, shown) -> list[SpecReaction]:
 _DIAGRAM_UNITS = {"shear": "force", "moment": "moment", "deflection": "length", "rotation": "rotation"}
 
 
+def _clean(value: float, biggest: float) -> float:
+    """'value' with round-off (a millionth of the diagram's largest value) snapped to 0."""
+    return 0.0 if abs(value) <= 1e-6 * biggest else value
+
+
 def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
     order = {k: i for i, k in enumerate(key_order)}
     # Loads without a case (None) first, then the cases in legend order.
@@ -290,14 +295,14 @@ def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
         curves = [c for case in cases for c in result.curves if c.quantity == kind and c.case == case]
         if not curves:
             continue
+        # Every curve lists its max and min, even when one is small or zero, so
+        # no result looks missing. A constant curve lists its one value.
         biggest = max((abs(v) for c in curves for v in c.y), default=0.0)
         peaks = []
         for c in curves:
             for pick in (max, min):
                 i = pick(range(len(c.y)), key=lambda j: c.y[j])
-                value = c.y[i]
-                if biggest == 0 or abs(value) < 0.02 * biggest:
-                    continue
+                value = _clean(c.y[i], biggest)
                 if any(p.key == c.case and p.x == c.x[i] for p in peaks):
                     continue
                 peaks.append(SpecPeak(key=c.case, x=c.x[i], y=value, label=_fmt(value, _DIAGRAM_UNITS[kind], shown)))
@@ -310,15 +315,13 @@ def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
 
 
 def _envelope_diagram(kind: str, env, shown) -> SpecDiagram:
-    """The max and min curves over the combinations, with the largest and smallest values labelled."""
+    """The max and min curves over the combinations, each with its extreme value labelled."""
     curves = [SpecCurve(key=None, role="max", x=list(env.x), y=list(env.max)),
               SpecCurve(key=None, role="min", x=list(env.x), y=list(env.min))]
-    biggest = max(max(abs(v) for v in env.max), max(abs(v) for v in env.min))
-    peaks = []
+    peaks = []  # Always both, even when one is small or zero, so no result looks missing.
     for role, ys, pick in (("max", env.max, max), ("min", env.min, min)):
         i = pick(range(len(ys)), key=lambda j: ys[j])
-        if biggest and abs(ys[i]) >= 0.02 * biggest and (role == "max") == (ys[i] > 0):
-            peaks.append(SpecPeak(key=None, role=role, x=env.x[i], y=ys[i],
+        peaks.append(SpecPeak(key=None, role=role, x=env.x[i], y=ys[i],
                                   label=_fmt(ys[i], _DIAGRAM_UNITS[kind], shown)))
     return SpecDiagram(kind=kind, title=f"{DIAGRAM_TITLES[kind]} envelope",
                        curves=curves, peaks=peaks, envelope=True)
