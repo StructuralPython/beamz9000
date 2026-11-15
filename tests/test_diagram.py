@@ -13,7 +13,8 @@ EXAMPLE = pathlib.Path(__file__).parents[1] / "examples" / "beam_scheme.yaml"
 
 @pytest.fixture(scope="module")
 def spec():
-    return from_scheme(bz.load_scheme(EXAMPLE)["B1"], "B1")
+    # The free-body diagram only; tests/test_analysis.py covers the results.
+    return from_scheme(bz.load_scheme(EXAMPLE)["B1"], "B1", analyze=False)
 
 
 @pytest.fixture(scope="module")

@@ -24,8 +24,9 @@ def _pdf_text(data: bytes):
 
 def test_pdf_has_exact_size_and_searchable_text():
     r = ReportLabRenderer(width=468, height=200)
-    diagram = bz.beam_diagram(EXAMPLES / "beam_scheme.yaml", bz.Layout(font_size_pt=8),
-                              aspect=r.aspect, margin=r.margin, width=r.width_pt)
+    spec = bz.from_scheme(bz.load_scheme(EXAMPLES / "beam_scheme.yaml")["B1"], analyze=False)
+    diagram = bz.beam_diagram(spec, bz.Layout(font_size_pt=8), aspect=r.aspect, margin=r.margin,
+                              width=r.width_pt)
     rect, text, spans = _pdf_text(r.to_bytes(diagram))
     assert (rect.width, rect.height) == pytest.approx((468, 200))
     for label in ["15 kN", "5 kN·m", "3.4 kPa", "4500 mm", "residential"]:

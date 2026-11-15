@@ -26,8 +26,9 @@ OKABE_ITO = [
 
 
 # The proportions a fit stretches to change a diagram's aspect ratio: the load
-# strata only, so supports, dimensions and text keep their spacing.
-VERTICAL_FIELDS = ("point_height", "line_height", "beam_clearance", "band_gap", "row_gap")
+# strata and result diagrams only, so supports, dimensions and text keep their
+# spacing.
+VERTICAL_FIELDS = ("point_height", "line_height", "beam_clearance", "band_gap", "row_gap", "result_height")
 
 # Symbols that are sized like text: when text is sized in points, they scale
 # with it, so a support or a legend swatch keeps its size next to a label.
@@ -81,6 +82,18 @@ class Layout(BaseModel):
     dimension_spacing: float = Field(0.08, description="Distance between chained and overall lines.")
     tick_size: float = 0.012
     dimension_stroke_width: float = 0.8
+
+    # Analysis results
+    reactions: bool = Field(True, description="Draw each support's reactions when the beam was analysed.")
+    reaction_line: float = Field(1.25, description="Line pitch of the reactions under a support, in em.")
+    result_height: float = Field(0.1, description="Height of the largest value in a result diagram.")
+    result_gap: float = Field(0.06, description="Gap above each result diagram.")
+    result_fill_opacity: float = 0.12
+    result_stroke_width: float = 1.2
+    result_axis_color: str = "#8c8c8c"
+    moment_on_tension_side: bool = Field(
+        True, description="Draw positive (sagging) moment below the axis, on the tension side.",
+    )
 
     # Legend
     legend: bool = True

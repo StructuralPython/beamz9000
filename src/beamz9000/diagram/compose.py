@@ -22,6 +22,9 @@ from __future__ import annotations
 
 import math
 import pathlib
+
+import shapely
+from shapely.geometry import LineString, Polygon
 from dataclasses import dataclass
 from typing import Optional
 
@@ -29,12 +32,13 @@ from beamz9000.diagram.layout import Layout
 from beamz9000.graphics import glyphs
 from beamz9000.graphics.elements import Group, Shape, Text, group, translate
 from beamz9000.render.frame import frame
-from beamz9000.spec import BeamSpec, SpecLoad, from_scheme
+from beamz9000.spec import BeamSpec, SpecDiagram, SpecLoad, from_scheme
 
 Bounds = tuple[float, float, float, float]
 
 # Drawing order of the strata.
 Z_LOAD_FILL, Z_LOAD, Z_BEAM, Z_SUPPORT, Z_DIMENSION, Z_TEXT = 1, 2, 3, 4, 2, 5
+Z_RESULT_FILL, Z_RESULT_AXIS, Z_RESULT = 1, 2, 3
 
 
 @dataclass(frozen=True)
@@ -297,6 +301,122 @@ def load_bands(spec: BeamSpec, layout: Layout, base: float = 0.0) -> Group:
     return group(bands, role="loads")
 
 
+# --- Analysis results ------------------------------------------------------------------
+
+
+def reactions(spec: BeamSpec, layout: Layout, top: float) -> Group:
+    """
+    Each support's reactions below 'top': one line per load case, in the
+    case's legend colour, centred under the support. A column too wide for
+    the room between its neighbours puts each reaction component on its own
+    line, and shifts toward open space.
+    """
+    if not spec.reactions or not layout.reactions:
+        return group(role="reactions")
+    L = spec.length
+    fs = _font_size(layout, L)
+    gap = layout.label_gap * fs
+    pitch = layout.reaction_line * fs
+    order = {k.name: i for i, k in enumerate(spec.keys)}
+    nodes = sorted({r.node for r in spec.reactions})
+    parts = []
+    for n, node in enumerate(nodes):
+        x = spec.nodes[node]
+        # Room to the halfway points between this support and its neighbours.
+        left = x - (x - spec.nodes[nodes[n - 1]]) / 2 + gap if n > 0 else -math.inf
+        right = x + (spec.nodes[nodes[n + 1]] - x) / 2 - gap if n < len(nodes) - 1 else math.inf
+        rows = sorted((r for r in spec.reactions if r.node == node), key=lambda r: order.get(r.key, 0))
+
+        def column(split: bool) -> list[Text]:
+            texts, y = [], top - gap
+            for r in rows:
+                lines = r.label.split("  ") if split else [r.label]
+                for line in lines:
+                    texts.append(label(line, (x, y), layout, L, va="top",
+                                       color=layout.color(order.get(r.key, 0)), key=r.key))
+                    y -= pitch
+            return texts
+
+        texts = column(split=False)
+        width = lambda ts: max(t.bounds[2] for t in ts) - min(t.bounds[0] for t in ts)
+        if width(texts) > right - left:
+            texts = column(split=True)
+        x0 = min(t.bounds[0] for t in texts)
+        x1 = max(t.bounds[2] for t in texts)
+        shift = max(0.0, left - x0) if x1 - x0 <= right - left or right == math.inf else 0.0
+        shift -= max(0.0, x1 + shift - right)
+        parts += [translate(t, dx=shift) for t in texts]
+    return group(parts, role="reactions")
+
+
+def result_diagrams(spec: BeamSpec, layout: Layout, top: float) -> Group:
+    """The result diagrams, stacked downward from 'top'."""
+    panels = []
+    for diagram in spec.diagrams:
+        panel = result_panel(spec, layout, diagram)
+        if not len(panel):
+            continue
+        dy = top - layout.result_gap * spec.length - panel.bounds[3]
+        panels.append(translate(panel, dy=dy))
+        top = panels[-1].bounds[1]
+    return group(panels, role="results")
+
+
+def result_panel(spec: BeamSpec, layout: Layout, diagram: SpecDiagram) -> Group:
+    """
+    One result diagram with its axis on y = 0: a curve per load case filled to
+    the axis, the peaks labelled, the title to the left of the axis, and faint
+    lines at the supports. Moment is drawn on the tension side unless the
+    layout says otherwise.
+    """
+    L = spec.length
+    fs = _font_size(layout, L)
+    gap = layout.label_gap * fs
+    x0, x1 = spec.nodes[0], spec.nodes[-1]
+    biggest = max((abs(v) for c in diagram.curves for v in c.y), default=0.0)
+    flip = -1.0 if diagram.kind == "moment" and layout.moment_on_tension_side else 1.0
+    k = 0.0 if biggest == 0 else flip * layout.result_height * L / biggest
+    order = {key.name: i for i, key in enumerate(spec.keys)}
+    color = lambda key: layout.color(order.get(key, 0))
+
+    parts = []
+    lo = min((k * v for c in diagram.curves for v in c.y), default=0.0)
+    hi = max((k * v for c in diagram.curves for v in c.y), default=0.0)
+    for x in spec.nodes:
+        parts.append(Shape(geometry=LineString([(x, min(lo, 0)), (x, max(hi, 0))]),
+                           stroke_color=layout.result_axis_color, stroke_width=0.5,
+                           line_type="dotted", z=Z_RESULT_AXIS))
+    parts.append(Shape(geometry=LineString([(x0, 0), (x1, 0)]), stroke_color=layout.ink,
+                       stroke_width=layout.dimension_stroke_width, z=Z_RESULT_AXIS))
+    for c in diagram.curves:
+        pts = [(x, k * y) for x, y in zip(c.x, c.y)]
+        area = shapely.make_valid(Polygon([(c.x[0], 0), *pts, (c.x[-1], 0)]))
+        parts.append(Shape(geometry=area, fill_color=color(c.key), fill_opacity=layout.result_fill_opacity,
+                           stroke_color=None, z=Z_RESULT_FILL, key=c.key))
+        parts.append(Shape(geometry=LineString(pts), stroke_color=color(c.key),
+                           stroke_width=layout.result_stroke_width, z=Z_RESULT, key=c.key))
+
+    # Each peak gets a dot on its curve; the values go in a column to the right,
+    # one line per load case ("max / min"), centred on the axis.
+    r = 0.22 * fs  # Peak dots are sized like the text.
+    lines = []
+    for c in diagram.curves:
+        peaks = [p for p in diagram.peaks if p.key == c.key]
+        for peak in peaks:
+            parts.append(Shape(geometry=shapely.Point(peak.x, k * peak.y).buffer(r),
+                               fill_color=color(c.key), stroke_color=None, z=Z_RESULT, key=c.key))
+        if peaks:
+            values = sorted(peaks, key=lambda p: -p.y)
+            lines.append((c.key, " / ".join(p.label for p in values)))
+    pitch = layout.reaction_line * fs
+    y = (len(lines) - 1) * pitch / 2
+    for key, text in lines:
+        parts.append(label(text, (x1 + 3 * gap, y), layout, L, ha="left", va="center", color=color(key), key=key))
+        y -= pitch
+    parts.append(label(diagram.title, (x0 - 3 * gap, 0), layout, L, ha="right", va="center"))
+    return group(parts, role="result", key=diagram.kind)
+
+
 # --- Dimensions and legend ----------------------------------------------------------
 
 
@@ -557,8 +677,14 @@ def _compose(spec: BeamSpec, layout: Layout, position: str) -> Group:
     loads = load_bands(spec, layout, base=_half_depth(spec))
     below = [g.bounds[1] for g in (sup, labels) if len(g)]
     lowest = min([*below, -_half_depth(spec)])
+    rxn = reactions(spec, layout, top=lowest)
+    if len(rxn):
+        lowest = rxn.bounds[1]
     dims = dimensions(spec, layout, top=lowest)
-    parts = [loads, beam, sup, labels, dims]
+    results = result_diagrams(spec, layout, top=dims.bounds[1])
+    # Reactions and result diagrams only appear when the beam was analysed.
+    parts = [loads, beam, sup, labels, rxn if len(rxn) else None, dims, results if len(results) else None]
     if layout.legend:
         parts.append(legend(spec, layout, group(parts).bounds, position))
+    parts = [p for p in parts if p is not None]
     return group(parts, role="diagram")

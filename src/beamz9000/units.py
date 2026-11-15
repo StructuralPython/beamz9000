@@ -8,6 +8,7 @@ in `_environment`. These helpers let the rest of the code treat both alike.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Union
 
@@ -180,3 +181,97 @@ def _trim(number: str) -> str:
     if "." in number:
         number = number.rstrip("0").rstrip(".")
     return "0" if number in ("-0", "") else number
+
+
+# --- Results ------------------------------------------------------------------
+#
+# Computed results are shown in the units the scheme was written in: a beam
+# loaded in kN gets reactions in kN and moments in kN·m. Units per kind, with
+# their size in SI base units.
+RESULT_UNITS: dict[str, dict[str, float]] = {
+    "force": {"N": 1.0, "kN": 1e3, "MN": 1e6, "lb": 4.4482216, "lbf": 4.4482216, "kip": 4448.2216},
+    "moment": {
+        "N·m": 1.0, "kN·m": 1e3, "MN·m": 1e6,
+        "lb·ft": 1.3558179, "lb·in": 0.11298483, "kip·ft": 1355.8179, "kip·in": 112.98483,
+    },
+    "length": {"mm": 1e-3, "cm": 1e-2, "m": 1.0, "in": 0.0254, "ft": 0.3048},
+}
+_DEFAULT_RESULT_UNITS = {"force": "kN", "moment": "kN·m", "length": "mm", "rotation": "rad"}
+_IMPERIAL_LENGTHS = {"in", "ft"}
+
+
+def unit_of(value: Any) -> str | None:
+    """The typeset unit a Quantity was written in ("kN·m" for "5 kN*m"), or None."""
+    if isinstance(value, Quantity):
+        return value.display.partition(" ")[2] or None
+    return None
+
+
+def result_units(values: dict[str, list[Any]]) -> dict[str, str]:
+    """
+    Picks display units for results from the quantities a scheme used:
+    'values' maps "force", "moment", "line_load", "pressure" and "length" to
+    the values written for each. Forces follow point loads (or the force in a
+    line load or pressure unit), moments follow moment loads (or force × the
+    span length unit), deflections are mm, or in for imperial spans.
+    """
+    chosen = dict(_DEFAULT_RESULT_UNITS)
+    force = _first_unit(values.get("force", []), RESULT_UNITS["force"])
+    if force is None:
+        for kind in ("line_load", "pressure"):
+            for v in values.get(kind, []):
+                unit = unit_of(v) or ""
+                head = unit.split("/")[0]
+                if head in RESULT_UNITS["force"]:
+                    force = head
+                elif unit in ("Pa", "kPa", "MPa"):
+                    force = {"Pa": "N", "kPa": "kN", "MPa": "MN"}[unit]
+                elif unit in ("psf", "psi", "ksf", "ksi"):
+                    force = "kip" if unit.startswith("k") else "lb"
+                if force:
+                    break
+            if force:
+                break
+    if force:
+        chosen["force"] = force
+    lengths = [unit_of(v) for v in values.get("length", [])]
+    imperial = any(u in _IMPERIAL_LENGTHS for u in lengths)
+    moment = _first_unit(values.get("moment", []), RESULT_UNITS["moment"])
+    if moment is None:
+        candidate = f"{chosen['force']}·{'ft' if imperial else 'm'}"
+        moment = candidate if candidate in RESULT_UNITS["moment"] else None
+    if moment:
+        chosen["moment"] = moment
+    if imperial:
+        chosen["length"] = "in"
+    return chosen
+
+
+def _first_unit(values: list[Any], table: dict[str, float]) -> str | None:
+    for v in values:
+        unit = unit_of(v)
+        if unit in table:
+            return unit
+    return None
+
+
+def result_label(value: float, kind: str, unit: str | None, signed: bool = True) -> str:
+    """
+    Formats a computed SI 'value' in 'unit' (a key of RESULT_UNITS[kind], or
+    "rad" for rotations) to three significant figures. With 'unit' None, the
+    value is a plain number from a unitless scheme and is shown bare.
+    """
+    if unit is None:
+        return _sig(value if signed else abs(value))
+    factor = RESULT_UNITS.get(kind, {}).get(unit, 1.0)
+    shown = value / factor
+    return f"{_sig(shown if signed else abs(shown))} {unit}"
+
+
+def _sig(value: float, figures: int = 3) -> str:
+    """'value' to 'figures' significant figures, without exponent notation."""
+    if value == 0:
+        return "0"
+    digits = max(0, figures - 1 - int(math.floor(math.log10(abs(value)))))
+    text = f"{value:.{digits}f}"
+    return _trim(text).replace("-", "−")
