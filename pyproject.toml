@@ -1,6 +1,6 @@
 [project]
 name = "beamz9000"
-version = "0.2.0"
+version = "0.2.1"
 description = "Beam free-body diagrams from a simple YAML scheme, drawn through shapely geometry."
 readme = "README.md"
 license = "Apache-2.0"
