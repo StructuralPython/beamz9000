@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from shapely.geometry.base import BaseGeometry
 
 from beamz9000.graphics import text as shaping
-from beamz9000.render.frame import frame
+from beamz9000.render.frame import frame, line_factor, line_weight
 from beamz9000.graphics.elements import Element, Shape, Text, flatten
 
 _DASHES = {"solid": None, "dashed": "6 4", "dotted": "1 3", "dashdot": "6 3 1 3"}
@@ -89,6 +89,11 @@ class SVGRenderer(BaseModel):
     background: Optional[str] = "white"
     hatch_spacing: float = Field(0.012, gt=0, description="Hatch line spacing, × drawing width.")
     embed_font: bool = False
+    line_scale: Optional[float] = Field(
+        None, gt=0,
+        description="Factor on every line weight. None thins lines in proportion when the output "
+        "is narrower than 12 in, so small images keep the proportions of large ones.",
+    )
 
     def to_string(self, element: Element) -> str:
         leaves = flatten(element)
@@ -125,12 +130,13 @@ class SVGRenderer(BaseModel):
         attrs.append(f'stroke="{stroke}"')
         if s.stroke_color is not None:
             # Stroke widths are points; 1 pt = 4/3 CSS px, converted to drawing units.
-            attrs.append(f'stroke-width="{_num(s.stroke_width * 4 / 3 / px_per_unit)}"')
+            sw = line_weight(s.stroke_width, line_factor(self.width_pt, self.line_scale))
+            attrs.append(f'stroke-width="{_num(sw * 4 / 3 / px_per_unit)}"')
             attrs.append('stroke-linecap="round" stroke-linejoin="round"')
             if s.stroke_opacity < 1:
                 attrs.append(f'stroke-opacity="{_num(s.stroke_opacity)}"')
             if _DASHES[s.line_type]:
-                dash = " ".join(_num(float(v) * s.stroke_width * 4 / 3 / px_per_unit) for v in _DASHES[s.line_type].split())
+                dash = " ".join(_num(float(v) * sw * 4 / 3 / px_per_unit) for v in _DASHES[s.line_type].split())
                 attrs.append(f'stroke-dasharray="{dash}"')
         out = [f'<path {" ".join(attrs)}/>']
         if closed and s.hatch:
@@ -146,7 +152,7 @@ class SVGRenderer(BaseModel):
         pid = f"hatch{len(defs)}"
         density = max(1, max(s.hatch.count(c) for c in set(s.hatch)))
         size = self.hatch_spacing * drawing_width / density
-        lw = 0.6 * 4 / 3 / px_per_unit
+        lw = line_weight(0.6, line_factor(self.width_pt, self.line_scale)) * 4 / 3 / px_per_unit
         angles = sorted({a for c in s.hatch for a in _HATCH_ANGLES.get(c, [])}) or [45]
         lines = "".join(
             f'<pattern id="{pid}{i}" patternUnits="userSpaceOnUse" width="{_num(size)}" height="{_num(size)}" '

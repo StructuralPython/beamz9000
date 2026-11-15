@@ -31,7 +31,7 @@ from shapely.geometry.base import BaseGeometry
 
 from beamz9000.graphics import text as shaping
 from beamz9000.graphics.elements import Element, Shape, Text, flatten
-from beamz9000.render.frame import frame
+from beamz9000.render.frame import frame, line_factor, line_weight
 
 # Dash patterns, × the stroke width.
 _DASHES = {"solid": None, "dashed": (6, 4), "dotted": (1, 3), "dashdot": (6, 3, 1, 3)}
@@ -86,6 +86,11 @@ class ReportLabRenderer(BaseModel):
     )
     margin: float = Field(0.02, ge=0, description="Margin around the drawing, × drawing width.")
     background: Optional[str] = None
+    line_scale: Optional[float] = Field(
+        None, gt=0,
+        description="Factor on every line weight. None thins lines in proportion when the output "
+        "is narrower than 12 in, so small images keep the proportions of large ones.",
+    )
     hatch_spacing: float = Field(4.0, gt=0, description="Hatch line spacing, in points.")
 
     @property
@@ -161,12 +166,13 @@ class ReportLabRenderer(BaseModel):
             canvas.setFillColor(fill)
         if stroke is not None:
             canvas.setStrokeColor(stroke)
-            canvas.setLineWidth(s.stroke_width)
+            sw = line_weight(s.stroke_width, line_factor(self.width_pt, self.line_scale))
+            canvas.setLineWidth(sw)
             canvas.setLineCap(1)
             canvas.setLineJoin(1)
             dash = _DASHES[s.line_type]
             if dash:
-                canvas.setDash([v * s.stroke_width for v in dash])
+                canvas.setDash([v * sw for v in dash])
         canvas.drawPath(path, stroke=int(stroke is not None), fill=int(fill is not None), fillMode=1)
         canvas.restoreState()
         if closed and s.hatch:
@@ -184,7 +190,7 @@ class ReportLabRenderer(BaseModel):
         canvas.saveState()
         canvas.clipPath(clip, stroke=0, fill=0, fillMode=1)
         canvas.setStrokeColor(_color(s.stroke_color or "black", s.stroke_opacity))
-        canvas.setLineWidth(_HATCH_WIDTH)
+        canvas.setLineWidth(line_weight(_HATCH_WIDTH, line_factor(self.width_pt, self.line_scale)))
         lines = []
         for angle in angles:
             a = math.radians(angle)

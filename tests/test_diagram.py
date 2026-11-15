@@ -188,7 +188,7 @@ def test_fixed_wall_covers_depth_without_growing(features):
     x0, y0, x1, y1 = wall_body.bounds
     assert x1 == pytest.approx(0.0, abs=1e-9)
     assert y0 < -0.3 and y1 > 0.3  # Covers the 600 mm depth,
-    assert x1 - x0 == pytest.approx(0.02 * 4.0)  # but keeps the glyph's thickness.
+    assert x1 - x0 == pytest.approx(bz.Layout().glyph_width / 2 * 4.0)  # but keeps the glyph's thickness.
 
 
 def test_angled_point_load(features):
@@ -224,3 +224,22 @@ def test_node_labels(features):
     assert bz.Beam.model_validate({"spans": [1] * 27, "node_labels": "auto"}).labels[26:] == ["AA", "AB"]
     with pytest.raises(Exception, match="node_labels"):
         bz.Beam.model_validate({"spans": [4], "labels": ["A"]})
+
+
+def test_line_weights_thin_with_a_narrow_output():
+    from beamz9000.render.frame import REFERENCE_WIDTH_PT, line_factor, line_weight
+
+    assert line_factor(REFERENCE_WIDTH_PT * 2) == 1.0  # Never thickened.
+    assert line_factor(REFERENCE_WIDTH_PT / 2) == pytest.approx(0.5)
+    assert line_factor(100, line_scale=1.0) == 1.0
+    assert line_weight(4.0, 0.5) == 2.0
+    assert line_weight(0.5, 0.1) == 0.25  # Floor.
+    d = bz.beam_diagram("examples/gallery.yaml", beam_id="simple_udl")
+    wide, narrow = (bz.SVGRenderer(width=w).to_string(d) for w in (1152, 384))
+    # In drawing units the beam stroke is the same fraction of the drawing.
+    import re
+
+    def beam_stroke(svg):
+        return max(float(v) for v in re.findall(r'stroke-width="([\d.]+)"', svg))
+
+    assert beam_stroke(narrow) == pytest.approx(beam_stroke(wide), rel=1e-3)
