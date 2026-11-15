@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import warnings
 from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -41,11 +42,12 @@ from ymprint import Ymprint
 from ymprint.blocks import blockstyles, content_box
 from ymprint.errors import BlockError
 
+from beamz9000 import analysis
 from beamz9000.diagram import Layout, beam_diagram
-from beamz9000.diagram.compose import as_spec
 from beamz9000.render.reportlab import ReportLabRenderer
+from beamz9000.results import results_dict
 from beamz9000.scheme import Beam, Scheme, load_scheme, parse_scheme
-from beamz9000.spec import BeamSpec
+from beamz9000.spec import BeamSpec, from_scheme
 
 BLOCK_CODE = "_beam"
 
@@ -90,6 +92,10 @@ class BeamBlock(BaseModel):
         None, description="Legend placement. Without it, the scheme's `display.legend`, else auto.",
     )
     caption: Optional[str] = None
+    namespace: Optional[str] = Field(
+        None,
+        description="The variable the analysis results are put in; the beam's id if not given.",
+    )
     layout: dict = Field(default_factory=dict, description="Any other diagram Layout settings.")
 
     @field_validator("height", mode="before")
@@ -105,7 +111,12 @@ def beam_block(block_key: str, block_value: Any, context: dict) -> list:
     """
     try:
         block = BeamBlock.model_validate(block_value or {})
-        spec = _spec(block, block_key, context)
+        beam, name, result = _beam(block, block_key, context)
+        # Analysed at most once: the drawing reuses the result.
+        spec = beam if isinstance(beam, BeamSpec) else from_scheme(
+            beam, name=name, analyze=result is not None, result=result)
+        if result is not None and "vars" in context:
+            context["vars"][block.namespace or name] = results_dict(beam, result)
         legend = {}
         if block.legend == "none":
             legend = {"legend": False}
@@ -147,7 +158,24 @@ def _diagram(spec: BeamSpec, layout: Layout, renderer: ReportLabRenderer):
     return beam_diagram(spec, layout, aspect=renderer.aspect, margin=renderer.margin, width=renderer.width_pt)
 
 
-def _spec(block: BeamBlock, block_key: str, context: dict) -> BeamSpec:
+def _beam(block: BeamBlock, block_key: str, context: dict):
+    """
+    Returns (beam, name, analysis result): a scheme Beam (or a BeamSpec passed
+    in), its id, and its analysis when the scheme asks for results and an
+    engine is installed (else None).
+    """
+    beam, name = _find_beam(block, block_key, context)
+    if not isinstance(beam, Beam) or not beam.results.requested:
+        return beam, name, None
+    try:
+        result = analysis.analyze(beam, list(beam.results.diagrams), beam.results.engine)
+    except ImportError as err:
+        warnings.warn(f"{err}; drawing the beam without results", stacklevel=2)
+        return beam, name, None
+    return beam, name, result
+
+
+def _find_beam(block: BeamBlock, block_key: str, context: dict):
     beam = block.beam
     if block.scheme is not None:
         path = pathlib.Path(context.get("base_dir", ".")) / block.scheme
@@ -158,14 +186,26 @@ def _spec(block: BeamBlock, block_key: str, context: dict) -> BeamSpec:
             raise ValueError(f"the scheme file was not found: {path}")
         if beam is not None and not isinstance(beam, str):
             raise ValueError("with `scheme`, `beam` is the id of a beam in it")
-        return as_spec(load_scheme(path), beam)
-    if isinstance(beam, (Beam, BeamSpec, Scheme)):
-        return as_spec(beam)
+        return _from_scheme(load_scheme(path), beam)
+    if isinstance(beam, Scheme):
+        return _from_scheme(beam, None)
+    if isinstance(beam, Beam):
+        return beam, _block_id(block_key) or "beam"
+    if isinstance(beam, BeamSpec):
+        return beam, beam.name or _block_id(block_key) or "beam"
     if isinstance(beam, dict):
         data = dict(beam)
         name = data.pop("id", None) or _block_id(block_key) or "beam"
-        return as_spec(parse_scheme({"_environment": block.environment, name: data}), name)
+        return parse_scheme({"_environment": block.environment, name: data})[name], name
     raise ValueError("give a `scheme` file, or the `beam` itself")
+
+
+def _from_scheme(scheme: Scheme, beam_id: Optional[str]):
+    if beam_id is None:
+        if len(scheme.beams) != 1:
+            raise ValueError(f"the scheme has {len(scheme.beams)} beams; name one with `beam`")
+        beam_id = next(iter(scheme.beams))
+    return scheme[beam_id], beam_id
 
 
 def _block_id(block_key: str) -> Optional[str]:
@@ -182,6 +222,71 @@ def _message(err: Exception) -> str:
             for e in err.errors()
         )
     return str(err)
+
+
+# --- Exporting analysis models ------------------------------------------------------
+
+# Tag (and tools package) per analysis model class, by "module.ClassName".
+_MODELS = {
+    "pycba_tools.model.CBAModel": ("pycba_tools.CBAModel", "pycba_tools"),
+    "Pynite.FEModel3D.FEModel3D": ("Pynite.FEModel3D", "pynite_tools"),
+}
+
+
+def _class_path(obj) -> str:
+    cls = type(obj)
+    return f"{cls.__module__}.{cls.__qualname__}"
+
+
+class _AnalysisModelMeta(type):
+    def __instancecheck__(cls, obj) -> bool:
+        return _class_path(obj) in _MODELS
+
+
+class AnalysisModel(metaclass=_AnalysisModelMeta):
+    """
+    Matches a pycba-tools CBAModel or a Pynite FEModel3D in isinstance checks
+    without importing either package, so registering the export serializer
+    costs nothing for documents without one.
+    """
+
+
+def serialize_model(model) -> dict:
+    """
+    An analysis model as JSON data: its tools package's `dump_dict` (with the
+    `metadata` block naming the library and versions), tagged for ymprint so
+    that it reads back as a model.
+    """
+    import importlib
+
+    from ymprint.exports import TYPE_KEY
+
+    tag, package = _MODELS[_class_path(model)]
+    return {TYPE_KEY: tag, **importlib.import_module(package).dump_dict(model)}
+
+
+def deserialize_model(data: dict):
+    """Rebuilds an exported analysis model with its tools package's `load_dict` (not yet analysed)."""
+    import importlib
+
+    from ymprint.exports import TYPE_KEY
+
+    data = dict(data)
+    tag = data.pop(TYPE_KEY)
+    package = next(p for t, p in _MODELS.values() if t == tag)
+    return importlib.import_module(package).load_dict(data)
+
+
+def setup() -> None:
+    """
+    The `ymprint.plugins` setup: lets documents `_export` the analysis models
+    the `_beam` block puts in their variables, and read them back.
+    """
+    from ymprint.exports import register_decoder, register_serializer
+
+    register_serializer(AnalysisModel, serialize_model)
+    for tag, _ in _MODELS.values():
+        register_decoder(tag, deserialize_model)
 
 
 app = Ymprint(name="beamz")

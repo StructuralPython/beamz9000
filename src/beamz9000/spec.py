@@ -155,7 +155,7 @@ class BeamSpec(_Frozen):
 
 
 def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool = False,
-                analyze: bool = True) -> BeamSpec:
+                analyze: bool = True, result=None) -> BeamSpec:
     """
     Returns the BeamSpec for a scheme Beam.
 
@@ -166,7 +166,9 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
 
     With 'analyze' and `results` in the scheme, the beam is analysed and the
     spec carries its reactions and result diagrams. Without an analysis
-    engine installed, it is drawn without them, with a warning.
+    engine installed, it is drawn without them, with a warning. 'result', an
+    AnalysisResult of the beam already found with `analysis.analyze`, is used
+    instead of analysing it again.
     """
     loads: list[SpecLoad] = []
     keys: dict[str, KeyKind] = {}
@@ -190,7 +192,7 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
     details = _pressure_details(beam, resolved, keys)
     reactions, diagrams = [], []
     if analyze and beam.results.requested:
-        result = _analyze(beam)
+        result = result if result is not None else _analyze(beam)
         if result is not None:
             for case in result.cases:
                 if case is not None:

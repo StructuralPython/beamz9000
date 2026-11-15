@@ -77,7 +77,7 @@ wheels = [
 
 [[package]]
 name = "beamz9000"
-version = "0.2.1"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "forallpeople" },
@@ -126,9 +126,9 @@ docs = [
 requires-dist = [
     { name = "forallpeople", specifier = ">=3.4.0" },
     { name = "matplotlib", specifier = ">=3.11" },
-    { name = "pycba-tools", marker = "extra == 'pycba'", specifier = ">=0.1.0" },
+    { name = "pycba-tools", marker = "extra == 'pycba'", specifier = ">=0.2.0" },
     { name = "pydantic", specifier = ">=2.10" },
-    { name = "pynite-tools", marker = "extra == 'pynite'", specifier = ">=0.8.1" },
+    { name = "pynite-tools", marker = "extra == 'pynite'", specifier = ">=0.9.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "reportlab", marker = "extra == 'reportlab'", specifier = ">=4.2" },
     { name = "shapely", specifier = ">=2.1" },
@@ -139,8 +139,8 @@ provides-extras = ["reportlab", "ymprint", "pycba", "pynite"]
 [package.metadata.requires-dev]
 dev = [
     { name = "ipykernel", specifier = ">=7.1.0" },
-    { name = "pycba-tools", specifier = ">=0.1.0" },
-    { name = "pynite-tools", specifier = ">=0.8.1" },
+    { name = "pycba-tools", specifier = ">=0.2.0" },
+    { name = "pynite-tools", specifier = ">=0.9.0" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "reportlab", specifier = ">=4.2" },
     { name = "ymprint", marker = "python_full_version >= '3.14'", specifier = ">=0.12.0" },
@@ -148,8 +148,8 @@ dev = [
 docs = [
     { name = "autodoc-pydantic", specifier = ">=2.2.0" },
     { name = "myst-parser", specifier = ">=5.2.0" },
-    { name = "pycba-tools", specifier = ">=0.1.0" },
-    { name = "pynite-tools", specifier = ">=0.8.1" },
+    { name = "pycba-tools", specifier = ">=0.2.0" },
+    { name = "pynite-tools", specifier = ">=0.9.0" },
     { name = "shibuya", specifier = ">=2026.7.12" },
     { name = "sphinx", specifier = ">=9.1.1" },
     { name = "sphinx-copybutton", specifier = ">=0.5.2" },
@@ -1504,7 +1504,7 @@ wheels = [
 
 [[package]]
 name = "pycba-tools"
-version = "0.1.0"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "deepmerge" },
@@ -1512,9 +1512,9 @@ dependencies = [
     { name = "pycba" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/79/e0/a119860958e10eafadd5e27fa56e1ba668cd4309627f785ac32d514a1913/pycba_tools-0.1.0.tar.gz", hash = "sha256:e8673ee0d36341d2139fcce8d94c254df86138988845ba56a11dc70797e40d39", size = 28222, upload-time = "2026-11-10T05:09:09.116Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/95/45/0c815e43fb9de69aabc0f37657c51e6b2340cac4d49ae0000a69ca8ba192/pycba_tools-0.2.0.tar.gz", hash = "sha256:f9b788d33e050dc8364cd1cd55d28ae5e8409f3ab213fd2048d7d477b5697864", size = 29061, upload-time = "2026-11-15T20:24:07.814Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/64/10/e8c547bf51e30ae3ad3e634cd90e161a6ae7eeb1fa3e0f37775f68fde428/pycba_tools-0.1.0-py3-none-any.whl", hash = "sha256:026f6ad97c27c9efe34592d76d983f98709edf3b0f1917503176417b3071a1a7", size = 27626, upload-time = "2026-11-10T05:09:07.83Z" },
+    { url = "https://files.pythonhosted.org/packages/55/30/05138848ac3e460534da05f273d1c96db2e1249965fe79b1599129832ec4/pycba_tools-0.2.0-py3-none-any.whl", hash = "sha256:6f87ae47061e55c8f3f267e89a6f82893c9ec565dbb279702709661cce806819", size = 28339, upload-time = "2026-11-15T20:24:06.51Z" },
 ]
 
 [[package]]
@@ -1734,7 +1734,7 @@ wheels = [
 
 [[package]]
 name = "pynite-tools"
-version = "0.8.1"
+version = "0.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "deepmerge" },
@@ -1745,9 +1745,9 @@ dependencies = [
     { name = "pydantic-core" },
     { name = "pynitefea" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/08/e9587bd62761358831bbad659790225e979b0b07fe2130e9b7da8273d957/pynite_tools-0.8.1.tar.gz", hash = "sha256:1c3b197f3ceae5aca7c5fbeaf62f555348e91497f65edd5503e35925e5d7b0b8", size = 34609, upload-time = "2026-11-08T05:10:55.547Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/10/d2e4ade913d692a1533a1fd1cf85af4f0efb280dc8cb942847d3536a07b7/pynite_tools-0.9.0.tar.gz", hash = "sha256:814116343d8dcb996482b47fa9a61c6b0f84194ea0888db39b3d31271c3ef967", size = 35488, upload-time = "2026-11-15T20:25:08.47Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/96/29bf0f3a95bc678f659e6ec2967b4da7de82919a6b6314943c19fffe80a9/pynite_tools-0.8.1-py3-none-any.whl", hash = "sha256:47579120f630dfbdfa95c3d19cde456ecd14e7e6742b07a48bf463dedbb0c140", size = 35305, upload-time = "2026-11-08T05:10:54.522Z" },
+    { url = "https://files.pythonhosted.org/packages/36/fa/d786ca7cb87e951c250152790ecab87b0bbb297b5e4354d1dc50c1b1a4ac/pynite_tools-0.9.0-py3-none-any.whl", hash = "sha256:c22c25fa44a3a12ef0e36aeab0b3a90af89e30e960d16ba7e8875ba9fc45fba0", size = 35995, upload-time = "2026-11-15T20:25:07.434Z" },
 ]
 
 [[package]]

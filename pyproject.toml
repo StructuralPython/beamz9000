@@ -1,6 +1,6 @@
 [project]
 name = "beamz9000"
-version = "0.2.1"
+version = "0.3.0"
 description = "Beam free-body diagrams from a simple YAML scheme, drawn through shapely geometry."
 readme = "README.md"
 license = "Apache-2.0"
@@ -26,16 +26,19 @@ ymprint = [
     "ymprint>=0.12.0 ; python_full_version >= '3.14'",
 ]
 pycba = [
-    "pycba-tools>=0.1.0",
+    "pycba-tools>=0.2.0",
 ]
 pynite = [
-    "pynite-tools>=0.8.1",
+    "pynite-tools>=0.9.0",
 ]
 
 # The _beam block for ymprint's `ym` command and every other ymprint application
 # (ymprint 0.12 and later read the `ymprint.blocks` entry-point group).
 [project.entry-points."ymprint.blocks"]
 _beam = "beamz9000.ymprint:beam_block"
+
+[project.entry-points."ymprint.plugins"]
+beamz9000 = "beamz9000.ymprint:setup"
 
 [build-system]
 requires = ["uv_build>=0.9.14,<0.12"]
@@ -44,16 +47,16 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "ipykernel>=7.1.0",
-    "pycba-tools>=0.1.0",
-    "pynite-tools>=0.8.1",
+    "pycba-tools>=0.2.0",
+    "pynite-tools>=0.9.0",
     "pytest>=8.3",
     "reportlab>=4.2",
     "ymprint>=0.12.0 ; python_full_version >= '3.14'",
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
-    "pycba-tools>=0.1.0",
-    "pynite-tools>=0.8.1",
+    "pycba-tools>=0.2.0",
+    "pynite-tools>=0.9.0",
     "myst-parser>=5.2.0",
     "shibuya>=2026.7.12",
     "sphinx>=9.1.1",
