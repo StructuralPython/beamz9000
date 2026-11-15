@@ -55,6 +55,14 @@ class SpecLoad(_Frozen):
 class LegendKey(_Frozen):
     name: str
     kind: KeyKind
+    detail: Optional[str] = Field(
+        None, description="Shown after the name, e.g. the pressures of an occupancy: 'D 2 kPa, L 2.4 kPa'.",
+    )
+
+    @property
+    def text(self) -> str:
+        """The legend entry: the name, then the detail in parentheses."""
+        return self.name if not self.detail else f"{self.name} ({self.detail})"
 
 
 class SpecReaction(_Frozen):
@@ -135,7 +143,7 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
     Returns the BeamSpec for a scheme Beam.
 
     A pressure load naming an occupancy is drawn as one load under the
-    occupancy's key, at the occupancy's total pressure. With
+    occupancy's key, at the occupancy's total pressure, labelled with its trib width(s). With
     'split_occupancies', it is drawn as one load per case under each case's
     key instead.
 
@@ -162,6 +170,7 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         keys.setdefault(key, "case" if r.case is not None else "factored")
         loads.append(_spec_load(r, key))
 
+    details = _pressure_details(beam, resolved, keys)
     reactions, diagrams = [], []
     if analyze and beam.results.requested:
         result = _analyze(beam)
@@ -180,7 +189,7 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         node_labels=beam.labels,
         depth=units.si(beam.depth) if beam.depth is not None else None,
         loads=loads,
-        keys=[LegendKey(name=k, kind=v) for k, v in keys.items()],
+        keys=[LegendKey(name=k, kind=v, detail=details.get(k)) for k, v in keys.items()],
         span_labels=[units.label(s) for s in beam.spans],
         length_label=units.label(beam.length),
         reactions=reactions,
@@ -282,7 +291,7 @@ def _spec_load(r, key: str) -> SpecLoad:
         return SpecLoad(**common, label1=r.label or units.magnitude_label(r.mag1), angle=r.angle)
     mag2 = units.si(r.mag2)
     if r.pressure is not None:
-        labels = (r.label or units.magnitude_label(r.pressure), None)
+        labels = (r.label, None) if r.label is not None else _trib_labels(r.trib1, r.trib2)
     elif r.label is not None or units.si(r.mag1) == mag2:
         labels = (r.label or units.magnitude_label(r.mag1), None)
     else:
@@ -295,13 +304,40 @@ def _spec_load(r, key: str) -> SpecLoad:
 
 def _combined_occupancy(occupancy: str, parts) -> SpecLoad:
     first = parts[0]
-    total_q = parts[0].pressure
     mag1, mag2 = parts[0].mag1, parts[0].mag2
+    label1, label2 = (first.label, None) if first.label is not None else _trib_labels(first.trib1, first.trib2)
     for p in parts[1:]:
-        total_q = units.add(total_q, p.pressure)
         mag1, mag2 = units.add(mag1, p.mag1), units.add(mag2, p.mag2)
     return SpecLoad(
         kind="line", key=occupancy, x1=units.si(first.x1), x2=units.si(first.x2),
         mag1=units.si(mag1), mag2=units.si(mag2),
-        label1=first.label or units.magnitude_label(total_q), area_load=True,
+        label1=label1, label2=label2, area_load=True,
     )
+
+
+def _trib_labels(trib1, trib2) -> tuple[str, Optional[str]]:
+    """A pressure load's label(s): its tributary width, or the width at each end if it varies."""
+    if units.si(trib1) == units.si(trib2):
+        return units.label(trib1), None
+    return units.label(trib1), units.label(trib2)
+
+
+def _pressure_details(beam: Beam, resolved, keys: dict) -> dict[str, str]:
+    """
+    The pressures behind each legend key, now that pressure loads are labelled
+    with their trib widths: an occupancy lists its pressure per case
+    ('D 2 kPa, L 2.4 kPa'), and a case lists the pressures of its own pressure
+    loads ('1.2 kPa').
+    """
+    details: dict[str, list[str]] = {}
+    for name, pressures in beam.occupancies.items():
+        if keys.get(name) == "occupancy":
+            details[name] = [f"{case} {units.label(q)}" for case, q in pressures.items()]
+    for r in resolved:
+        if r.pressure is None or (r.occupancy is not None and keys.get(r.occupancy) == "occupancy"):
+            continue
+        key = r.case if r.case is not None else FACTORED
+        text = units.label(r.pressure)
+        if text not in details.setdefault(key, []):
+            details[key].append(text)
+    return {k: ", ".join(v) for k, v in details.items() if v}

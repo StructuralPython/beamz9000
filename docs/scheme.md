@@ -54,7 +54,7 @@ out the end means the right end.
 | `point` | `mag` (aliases `magnitude`, `p`) | Positive acts downward. `angle` (alias `alpha`), in degrees from vertical between −90 and 90, tilts the arrow: positive turns its tail counter-clockwise about its tip. |
 | `moment` | `mag` (aliases `magnitude`, `m`) | Positive is counter-clockwise. |
 | `dist` | `mag` (aliases `magnitude`, `w`) for a UDL, or `mag1` → `mag2` | Linear between the two. |
-| `pressure` | `mag` (aliases `magnitude`, `q`, `occupancy`) × `trib_width1` → `trib_width2` | `trib_width`/`trib` gives a uniform width. `mag` may name an occupancy: the load then stands for one pressure per case in it, or only `case` if given. |
+| `pressure` | `mag` (aliases `magnitude`, `q`, `occupancy`) × `trib_width1` → `trib_width2` | `trib_width`/`trib` gives a uniform width. `mag` may name an occupancy: the load then stands for one pressure per case in it, or only `case` if given. Drawn labelled with its trib width(s); the pressures are listed in the legend. |
 
 Every load takes an optional `case` (with no case, the load is already factored)
 and an optional `label` that replaces the drawn magnitude. Loads may also be

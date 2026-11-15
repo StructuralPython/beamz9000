@@ -29,7 +29,7 @@ def test_pdf_has_exact_size_and_searchable_text():
                               width=r.width_pt)
     rect, text, spans = _pdf_text(r.to_bytes(diagram))
     assert (rect.width, rect.height) == pytest.approx((468, 200))
-    for label in ["15 kN", "5 kN·m", "3.4 kPa", "4500 mm", "residential"]:
+    for label in ["15 kN", "5 kN·m", "1.5 m", "4500 mm", "residential (D 1.5 kPa, L 1.9 kPa)"]:
         assert label in text
     assert {round(s["size"]) for s in spans} == {8}
 
@@ -93,7 +93,7 @@ def test_block_from_scheme_file(tmp_path):
         {"_beam_f": {"scheme": "gallery.yaml", "beam": "floor_beam", "height": "50 mm"}},
     ]})
     text = _all_text(data)
-    for label in ["15 kN", "Beam B1 loading", "4.4 kPa", "12.6 m"]:
+    for label in ["15 kN", "Beam B1 loading", "office (D 2.0 kPa, L 2.4 kPa)", "12.6 m"]:
         assert label in text
 
 

@@ -476,7 +476,7 @@ def _legend_key(spec: BeamSpec, layout: Layout, i: int, x: float, y: float) -> l
     return [
         Shape(geometry=glyphs.swatch(x, y - s / 2, s), fill_color=color, fill_opacity=0.6,
               stroke_color=color, stroke_width=layout.stroke_width, z=Z_TEXT, key=key.name),
-        label(key.name, (x + s + 0.6 * fs, y), layout, L, ha="left", va="center", key=key.name),
+        label(key.text, (x + s + 0.6 * fs, y), layout, L, ha="left", va="center", key=key.name),
     ]
 
 
