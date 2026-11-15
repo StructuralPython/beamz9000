@@ -65,7 +65,7 @@ one-beam {class}`~beamz9000.scheme.Scheme`.
 | `height` | | Height, e.g. `60 mm`, `2.5 in`, `180 pt` (a plain number is points). The diagram is arranged to fill width × height (see {ref}`fitting <fitting-to-a-size>`). |
 | `max_height_ratio` | `0.6` | Without `height`, the diagram takes its natural height, up to this fraction of the available height. Beyond it, the diagram is fitted to that height instead. |
 | `font_size` | `9` | Text size, in points. Supports, arrowheads and legend swatches scale with it. |
-| `legend` | `auto` | `auto`, `right`, `top` or `none`. |
+| `legend` | | `auto`, `right`, `top` or `none`. Without it, the scheme's `display: {legend: ...}`, else `auto`. |
 | `caption` | | A caption under the diagram, in the report's image caption style. |
 | `environment` | `structural` | The forallpeople environment for an inline beam. |
 | `layout` | | Any other {class}`~beamz9000.diagram.layout.Layout` setting, e.g. `{palette: ["#000", "#c00"]}`. |
