@@ -26,8 +26,10 @@ def test_spec_matches_scheme(spec):
     assert spec.nodes == [0.0, 4.5, 7.0]
     assert [k.name for k in spec.keys] == ["L", "Factored", "D", "residential"]
     occ = [l for l in spec.loads if l.key == "residential"][0]
-    assert (occ.mag1, occ.mag2, occ.label1, occ.area_load) == (10200.0, 5100.0, "3.4 kPa", True)
-    varying = [l for l in spec.loads if l.label2][0]
+    # Labelled with the trib width at each end; the pressures go in the legend.
+    assert (occ.mag1, occ.mag2, occ.label1, occ.label2, occ.area_load) == (10200.0, 5100.0, "3 m", "1.5 m", True)
+    assert spec.keys[-1].text == "residential (D 1.5 kPa, L 1.9 kPa)"
+    varying = [l for l in spec.loads if l.label2 and l.key != "residential"][0]
     assert (varying.label1, varying.label2) == ("1 kN/m", "4 kN/m")
 
 
@@ -97,8 +99,9 @@ def test_diagram_round_trips(diagram):
 
 def test_every_label_is_text(diagram):
     texts = [l.text for l in flatten(diagram) if isinstance(l, Text)]
-    for expected in ["15 kN", "10 kN", "2.5 kN/m", "1 kN/m", "4 kN/m", "3.4 kPa", "5 kN·m",
-                     "4500 mm", "2500 mm", "7000 mm", "Load cases & occupancies", "residential"]:
+    for expected in ["15 kN", "10 kN", "2.5 kN/m", "1 kN/m", "4 kN/m", "3 m", "1.5 m", "5 kN·m",
+                     "4500 mm", "2500 mm", "7000 mm", "Load cases & occupancies",
+                     "residential (D 1.5 kPa, L 1.9 kPa)"]:
         assert expected in texts
 
 
@@ -243,3 +246,14 @@ def test_line_weights_thin_with_a_narrow_output():
         return max(float(v) for v in re.findall(r'stroke-width="([\d.]+)"', svg))
 
     assert beam_stroke(narrow) == pytest.approx(beam_stroke(wide), rel=1e-3)
+
+
+def test_pressure_loads_show_trib_widths_and_legend_pressures():
+    scheme = bz.parse_scheme({"_environment": "structural", "B": {
+        "spans": ["6 m"],
+        "loads": [{"pressure": {"q": "1.2 kPa", "trib": "2.5 m", "case": "SDL"}},
+                  {"pressure": {"q": "0.8 kPa", "trib_width1": "1 m", "trib_width2": "2 m", "case": "SDL"}}],
+    }})
+    spec = bz.as_spec(scheme)
+    assert [(l.label1, l.label2) for l in spec.loads] == [("2.5 m", None), ("1 m", "2 m")]
+    assert [k.text for k in spec.keys] == ["SDL (1.2 kPa, 0.8 kPa)"]

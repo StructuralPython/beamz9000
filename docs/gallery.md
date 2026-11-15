@@ -47,7 +47,9 @@ Two uniform loads in different load cases are drawn in separate bands.
 ## Continuous floor beam with an occupancy
 
 A pressure load that names an occupancy is drawn once, hatched, at the
-occupancy's total pressure. A pressure with a varying tributary width tapers.
+occupancy's total pressure. Pressure loads are labelled with their tributary
+width (at each end, if it varies, and the load tapers); the pressures are listed
+in the legend.
 
 ```{literalinclude} ../examples/gallery.yaml
 :language: yaml

@@ -371,6 +371,8 @@ class ResolvedLoad(_Model):
     mag2: Optional[Value] = None
     label: Optional[str] = None
     pressure: Optional[Value] = Field(None, description="For pressure loads: the area load.")
+    trib1: Optional[Value] = Field(None, description="For pressure loads: the tributary width at x1.")
+    trib2: Optional[Value] = Field(None, description="For pressure loads: the tributary width at x2.")
     angle: float = Field(0.0, description="For point loads: degrees from vertical.")
 
 
@@ -696,6 +698,7 @@ class Beam(_Model):
             ResolvedLoad(
                 kind="line", x1=x1, x2=x2,
                 mag1=q * load.trib_width1, mag2=q * load.trib_width2, pressure=q,
+                trib1=load.trib_width1, trib2=load.trib_width2,
                 **{**common, "case": case, "occupancy": occupancy},
             )
             for case, q in pressures.items()
