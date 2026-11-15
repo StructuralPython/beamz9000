@@ -25,6 +25,12 @@ reportlab = [
 ymprint = [
     "ymprint>=0.12.0 ; python_full_version >= '3.14'",
 ]
+pycba = [
+    "pycba-tools>=0.1.0",
+]
+pynite = [
+    "pynite-tools>=0.8.1",
+]
 
 # The _beam block for ymprint's `ym` command and every other ymprint application
 # (ymprint 0.12 and later read the `ymprint.blocks` entry-point group).
@@ -38,6 +44,8 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "ipykernel>=7.1.0",
+    "pycba-tools>=0.1.0",
+    "pynite-tools>=0.8.1",
     "pytest>=8.3",
     "reportlab>=4.2",
     "ymprint>=0.12.0 ; python_full_version >= '3.14'",
