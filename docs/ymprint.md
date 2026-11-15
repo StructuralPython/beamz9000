@@ -142,8 +142,14 @@ data with a `metadata` block naming the library and the versions that wrote it:
 
 A document that reads the export back through `_data` gets a model again,
 built with the tools package's `load_dict` (call `analyze()` on it for
-results). To export only the model, give it its own variable in a `_py` block
-(`source: fb_model = fb["model"]`) and export `$fb_model`.
+results). Export only part of the variable with a path (ymprint 0.13 and
+later):
+
+```yaml
+_export:
+  fb_model: $fb.model
+  Fy_max_B: $fb.reactions.B.max.Fy
+```
 
 The results come from {func}`beamz9000.results.results_dict`, which can be
 used outside ymprint with {func}`beamz9000.analysis.analyze`.

@@ -106,3 +106,20 @@ def test_models_export_with_metadata_and_read_back(engine):
     assert data["metadata"]["library_version"] and data["metadata"]["generator_version"]
     back = json.loads(exports.dumps({"model": model}), object_hook=exports.decode_typed)["model"]
     assert type(back) is type(model)
+
+
+def test_the_model_exports_by_path(tmp_path):
+    from ymprint import exports
+    from ymprint.plugins import load_plugins
+
+    from beamz9000.ymprint import beam_block
+
+    load_plugins()
+    (tmp_path / "analysis.yaml").write_text((EXAMPLES / "analysis.yaml").read_text())
+    context = {**PAGE, "base_dir": str(tmp_path), "vars": {}}
+    beam_block("_beam", {"scheme": "analysis.yaml", "beam": "factored_floor_beam", "namespace": "fb"}, context)
+    values = exports.evaluate_exports(
+        {"model": "$fb.model", "Fy": "$fb.reactions.B.max.Fy"}, context["vars"], "calc.yml")
+    data = json.loads(exports.dumps(values))
+    assert data["model"]["metadata"]["generator"] == "pycba-tools"
+    assert data["Fy"] == pytest.approx(108.56)

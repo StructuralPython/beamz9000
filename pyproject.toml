@@ -1,6 +1,6 @@
 [project]
 name = "beamz9000"
-version = "0.3.0"
+version = "0.3.1"
 description = "Beam free-body diagrams from a simple YAML scheme, drawn through shapely geometry."
 readme = "README.md"
 license = "Apache-2.0"
@@ -23,7 +23,7 @@ reportlab = [
     "reportlab>=4.2",
 ]
 ymprint = [
-    "ymprint>=0.12.0 ; python_full_version >= '3.14'",
+    "ymprint>=0.13.0 ; python_full_version >= '3.14'",
 ]
 pycba = [
     "pycba-tools>=0.2.0",
@@ -51,7 +51,7 @@ dev = [
     "pynite-tools>=0.9.0",
     "pytest>=8.3",
     "reportlab>=4.2",
-    "ymprint>=0.12.0 ; python_full_version >= '3.14'",
+    "ymprint>=0.13.0 ; python_full_version >= '3.14'",
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
