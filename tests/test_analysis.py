@@ -89,10 +89,14 @@ def test_engines_agree(beam_id):
         assert np.max(np.abs(np.subtract(ca.y, cb.y))) <= 2e-3 * scale
 
 
-def test_uncased_loads_form_the_factored_case():
-    beam = _beam(loads=[{"point": {"p": "10 kN", "x": "3 m"}}], results=["forces"])
+def test_uncased_loads_form_an_unnamed_case():
+    beam = _beam(loads=[{"point": {"p": "10 kN", "x": "3 m"}}], results=["forces", "reactions"])
     result = analysis.analyze(beam, ["moment"])
-    assert result.cases == ["Factored"]
+    assert result.cases == [None]
+    spec = from_scheme(beam)
+    assert spec.keys == []  # No legend entry.
+    assert {r.key for r in spec.reactions} == {None}
+    assert spec.loads[0].key is None
 
 
 @pytest.mark.parametrize("engine", ENGINES)
@@ -205,3 +209,78 @@ def test_analysed_beam_fits_an_exact_box():
                               margin=r.margin, width=r.width_pt)
     x0, y0, x1, y1 = bz.render.frame(diagram.bounds, r.margin, r.aspect)
     assert (x1 - x0) / (y1 - y0) == pytest.approx(1.0)
+
+
+# --- Load combinations ----------------------------------------------------------------------
+
+
+def _combo_beam(**fields):
+    return _beam(e="200 GPa", i="60e6 mm**4",
+                 loads=[{"dist": {"w": "5 kN/m", "case": "D"}}, {"dist": {"w": "4 kN/m", "case": "L"}},
+                        {"point": {"p": "100 kN", "x": "3 m"}}],  # Uncased: in no combination.
+                 **fields)
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_force_combos_envelope_shear_moment_and_reactions(engine):
+    beam = _combo_beam(load_combos=[{"ULS1": {"D": 1.4}}, {"ULS2": {"D": 1.25, "L": 1.5}}, {"W": {"W": 1.4}}],
+                       results=["forces", "deflections", "reactions"])
+    result = analysis.analyze(beam, ["shear", "moment", "deflection"], engine)
+    assert result.cases == ["D", "L"]  # The uncased load is left out.
+    assert result.combos == {"forces": ["ULS1", "ULS2"], "deflections": ["ULS1", "ULS2"]}  # W: no wind loads.
+    w_max, w_min, L = 1.25 * 5e3 + 1.5 * 4e3, 1.4 * 5e3, 6.0
+    moment = result.envelope("moment")
+    assert max(moment.max) == pytest.approx(w_max * L**2 / 8, rel=1e-4)
+    assert max(moment.min) == pytest.approx(w_min * L**2 / 8, rel=1e-4)
+    (left, right) = result.reaction_envelopes()
+    assert left.fy == pytest.approx((w_max * L / 2, w_min * L / 2))
+
+
+def test_combo_groups_apply_separately():
+    beam = _combo_beam(load_combos={"forces": [{"ULS": {"D": 1.25, "L": 1.5}}]},
+                       results=["forces", "deflections"])
+    result = analysis.analyze(beam, ["moment", "deflection"])
+    assert result.envelope("moment") is not None
+    assert result.envelope("deflection") is None  # No deflection combinations: the cases.
+    assert {c.case for c in result.curves if c.quantity == "deflection"} == {"D", "L"}
+
+
+def test_envelope_diagrams_and_factored_reactions_in_the_spec():
+    spec = bz.as_spec(EXAMPLES / "analysis.yaml", "factored_floor_beam")
+    kinds = {d.kind: d for d in spec.diagrams}
+    assert kinds["moment"].envelope and kinds["moment"].title == "Moment envelope"
+    assert [c.role for c in kinds["moment"].curves] == ["max", "min"]
+    assert kinds["deflection"].envelope  # Over the SLS combination.
+    node_a = [r for r in spec.reactions if r.node == 0]
+    assert [(r.key, r.role) for r in node_a] == [("D", "case"), ("L", "case"), (None, "max"), (None, "min")]
+    assert node_a[2].label.startswith("max ↑ ") and node_a[3].label.startswith("min ↑ ")
+
+
+def test_reactions_are_opt_in():
+    beam = _beam(loads=[{"dist": {"w": "5 kN/m", "case": "D"}}], results=["moment"])
+    assert from_scheme(beam).reactions == []
+    alone = _beam(loads=[{"dist": {"w": "5 kN/m", "case": "D"}}], results=["reactions"])
+    assert alone.results.requested and alone.results.diagrams == []
+    spec = from_scheme(alone)
+    assert [r.label for r in spec.reactions] == ["↑ 15 kN", "↑ 15 kN"] and spec.diagrams == []
+    mapping = _beam(loads=[{"dist": {"w": "5 kN/m", "case": "D"}}],
+                    results={"diagrams": ["shear", "reactions"], "engine": "pycba"})
+    assert mapping.results.reactions and mapping.results.diagrams == ["shear"]
+
+
+def test_combo_named_like_a_case_is_an_error():
+    beam = _combo_beam(load_combos=[{"D": {"D": 1.4}}], results=["moment"])
+    with pytest.raises(ValueError, match="'D' has the name of a load case"):
+        analysis.analyze(beam, ["moment"])
+
+
+def test_engines_agree_on_envelopes():
+    beam = bz.load_scheme(EXAMPLES / "analysis.yaml")["factored_floor_beam"]
+    a, b = (analysis.analyze(beam, ["shear", "moment", "deflection"], e) for e in ENGINES)
+    for q in ("shear", "moment", "deflection"):
+        ea, eb = a.envelope(q), b.envelope(q)
+        scale = max(map(abs, ea.max + ea.min))
+        assert np.max(np.abs(np.subtract(ea.max, eb.max))) <= 2e-3 * scale
+        assert np.max(np.abs(np.subtract(ea.min, eb.min))) <= 2e-3 * scale
+    for ra, rb in zip(a.reaction_envelopes(), b.reaction_envelopes()):
+        assert ra.fy == pytest.approx(rb.fy, abs=1e-6)

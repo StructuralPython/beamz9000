@@ -11,8 +11,9 @@ its top and supports hang from its bottom (fixed ends become walls at its
 ends). Node labels sit under each node, between the supports and the
 dimensions.
 
-Loads are drawn in bands, one per legend key (load case, occupancy, or
-"Factored"), stacked upward from the beam in the order keys first appear.
+Loads are drawn in bands, one per legend key (load case or occupancy, or
+none for loads without a case, which are drawn in ink), stacked upward from
+the beam in the order they first appear.
 Within a band, loads are packed into rows so that no two items (glyph plus
 label) overlap. Load heights are scaled per load type across the whole beam,
 so bands can be compared by eye.
@@ -276,17 +277,26 @@ def pack_rows(extents: list[tuple[float, float]], gap: float) -> list[int]:
     return placed
 
 
+def key_color(spec: BeamSpec, layout: Layout, key: Optional[str]) -> str:
+    """A legend key's colour; ink for None (loads without a case, and envelopes)."""
+    if key is None:
+        return layout.ink
+    names = [k.name for k in spec.keys]
+    return layout.color(names.index(key) if key in names else 0)
+
+
 def load_bands(spec: BeamSpec, layout: Layout, base: float = 0.0) -> Group:
     """
-    The loads, in one band per legend key stacked upward from 'base'. Each
-    band packs its loads into as many rows as needed to avoid overlaps.
+    The loads, in one band per legend key stacked upward from 'base' (loads
+    without a case have a band of their own). Each band packs its loads into
+    as many rows as needed to avoid overlaps.
     """
     scale = _scale_for(spec, layout)
-    colors = {k.name: layout.color(i) for i, k in enumerate(spec.keys)}
     y = base + scale.size(layout.beam_clearance)
     bands = []
-    for key in spec.keys:
-        items = [load_item(l, scale, colors[key.name], layout) for l in spec.loads if l.key == key.name]
+    for key in dict.fromkeys(l.key for l in spec.loads):
+        color = key_color(spec, layout, key)
+        items = [load_item(l, scale, color, layout) for l in spec.loads if l.key == key]
         if not items:
             continue
         rows = pack_rows([(i.bounds[0], i.bounds[2]) for i in items], scale.size(layout.item_gap))
@@ -296,7 +306,7 @@ def load_bands(spec: BeamSpec, layout: Layout, base: float = 0.0) -> Group:
             members = [i for i, r in zip(items, rows) if r == row]
             placed += [translate(i, 0.0, row_base) for i in members]
             row_base += max(i.bounds[3] for i in members) + scale.size(layout.row_gap)
-        bands.append(group(placed, key=key.name, role="band"))
+        bands.append(group(placed, key=key, role="band"))
         y = row_base - scale.size(layout.row_gap) + scale.size(layout.band_gap)
     return group(bands, role="loads")
 
@@ -307,7 +317,8 @@ def load_bands(spec: BeamSpec, layout: Layout, base: float = 0.0) -> Group:
 def reactions(spec: BeamSpec, layout: Layout, top: float) -> Group:
     """
     Each support's reactions below 'top': one line per load case, in the
-    case's legend colour, centred under the support. A column too wide for
+    case's legend colour, then the factored max and min (in ink) when there
+    are force combinations, centred under the support. A column too wide for
     the room between its neighbours puts each reaction component on its own
     line, and shifts toward open space.
     """
@@ -325,7 +336,9 @@ def reactions(spec: BeamSpec, layout: Layout, top: float) -> Group:
         # Room to the halfway points between this support and its neighbours.
         left = x - (x - spec.nodes[nodes[n - 1]]) / 2 + gap if n > 0 else -math.inf
         right = x + (spec.nodes[nodes[n + 1]] - x) / 2 - gap if n < len(nodes) - 1 else math.inf
-        rows = sorted((r for r in spec.reactions if r.node == node), key=lambda r: order.get(r.key, 0))
+        roles = {"case": 0, "max": 1, "min": 2}
+        rows = sorted((r for r in spec.reactions if r.node == node),
+                      key=lambda r: (roles[r.role], -1 if r.key is None else order.get(r.key, 0)))
 
         def column(split: bool) -> list[Text]:
             texts, y = [], top - gap
@@ -333,7 +346,7 @@ def reactions(spec: BeamSpec, layout: Layout, top: float) -> Group:
                 lines = r.label.split("  ") if split else [r.label]
                 for line in lines:
                     texts.append(label(line, (x, y), layout, L, va="top",
-                                       color=layout.color(order.get(r.key, 0)), key=r.key))
+                                       color=key_color(spec, layout, r.key), key=r.key))
                     y -= pitch
             return texts
 
@@ -364,10 +377,11 @@ def result_diagrams(spec: BeamSpec, layout: Layout, top: float) -> Group:
 
 def result_panel(spec: BeamSpec, layout: Layout, diagram: SpecDiagram) -> Group:
     """
-    One result diagram with its axis on y = 0: a curve per load case filled to
-    the axis, the peaks labelled, the title to the left of the axis, and faint
-    lines at the supports. Moment is drawn on the tension side unless the
-    layout says otherwise.
+    One result diagram with its axis on y = 0: a curve per load case (or the
+    max and min curves of an envelope, in ink) filled to the axis, the peaks
+    labelled, the title to the left of the axis, and faint lines at the
+    supports. Moment is drawn on the tension side unless the layout says
+    otherwise.
     """
     L = spec.length
     fs = _font_size(layout, L)
@@ -376,8 +390,7 @@ def result_panel(spec: BeamSpec, layout: Layout, diagram: SpecDiagram) -> Group:
     biggest = max((abs(v) for c in diagram.curves for v in c.y), default=0.0)
     flip = -1.0 if diagram.kind == "moment" and layout.moment_on_tension_side else 1.0
     k = 0.0 if biggest == 0 else flip * layout.result_height * L / biggest
-    order = {key.name: i for i, key in enumerate(spec.keys)}
-    color = lambda key: layout.color(order.get(key, 0))
+    color = lambda key: key_color(spec, layout, key)
 
     parts = []
     lo = min((k * v for c in diagram.curves for v in c.y), default=0.0)
@@ -401,11 +414,13 @@ def result_panel(spec: BeamSpec, layout: Layout, diagram: SpecDiagram) -> Group:
     r = 0.22 * fs  # Peak dots are sized like the text.
     lines = []
     for c in diagram.curves:
-        peaks = [p for p in diagram.peaks if p.key == c.key]
+        peaks = [p for p in diagram.peaks if p.key == c.key and p.role == c.role]
         for peak in peaks:
             parts.append(Shape(geometry=shapely.Point(peak.x, k * peak.y).buffer(r),
                                fill_color=color(c.key), stroke_color=None, z=Z_RESULT, key=c.key))
-        if peaks:
+        if peaks and c.role != "case":
+            lines.append((c.key, f"{c.role} {peaks[0].label}"))
+        elif peaks:
             values = sorted(peaks, key=lambda p: -p.y)
             lines.append((c.key, " / ".join(p.label for p in values)))
     pitch = layout.reaction_line * fs

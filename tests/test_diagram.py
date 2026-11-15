@@ -24,7 +24,7 @@ def diagram(spec):
 
 def test_spec_matches_scheme(spec):
     assert spec.nodes == [0.0, 4.5, 7.0]
-    assert [k.name for k in spec.keys] == ["L", "Factored", "D", "residential"]
+    assert [k.name for k in spec.keys] == ["L", "D", "residential"]  # Uncased loads: no entry.
     occ = [l for l in spec.loads if l.key == "residential"][0]
     # Labelled with the trib width at each end; the pressures go in the legend.
     assert (occ.mag1, occ.mag2, occ.label1, occ.label2, occ.area_load) == (10200.0, 5100.0, "3 m", "1.5 m", True)
@@ -56,7 +56,7 @@ def test_strata_order(diagram):
 
 def test_bands_stack_in_key_order_without_overlap(spec, diagram):
     bands = diagram.children[0].children
-    assert [b.key for b in bands] == ["L", "Factored", "D", "residential"]
+    assert [b.key for b in bands] == ["L", None, "D", "residential"]
     for lower, upper in zip(bands, bands[1:]):
         assert upper.bounds[1] > lower.bounds[3]
     for band in bands:
@@ -107,7 +107,11 @@ def test_every_label_is_text(diagram):
 
 def test_plain_number_scheme_draws():
     d = bz.beam_diagram(bz.load_scheme("B:\n  spans: [6, 4]\n  loads:\n    - dist: {w: 2}\n"))
-    assert [t.text for t in flatten(d) if isinstance(t, Text)][-1] == "Factored"
+    assert "2" in [t.text for t in flatten(d) if isinstance(t, Text)]
+    legend = next(c for c in d.children if c.role == "legend")
+    assert len(legend) == 0  # An uncased load has no legend entry.
+    band = next(c for c in d.children if c.role == "loads").children[0]
+    assert band.key is None and all(s.stroke_color in (None, "black") for s in flatten(band) if hasattr(s, "stroke_color"))
 
 
 def test_renderers(tmp_path, diagram):

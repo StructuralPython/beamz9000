@@ -1,6 +1,8 @@
 # Beams with analysis results: listing anything under `results` analyses the
-# beam (with pycba-tools or pynite-tools) and draws each support's reactions
-# for every load case, plus the diagrams asked for.
+# beam (with pycba-tools or pynite-tools) and draws the diagrams asked for, and
+# each support's reactions if `reactions` is listed. Without load combinations,
+# every load case is drawn; with them, shear, moment and reactions are factored
+# envelopes (see factored_floor_beam).
 _environment: structural
 
 floor_beam:
@@ -13,7 +15,7 @@ floor_beam:
     - point: {p: 18 kN, span_loc: [1, 2.4 m], case: L}
   occupancies:
     office: {D: 2.0 kPa, L: 2.4 kPa}
-  results: [forces, deflections]
+  results: [forces, deflections, reactions]
 
 cantilever:
   spans: [3000 mm]
@@ -22,7 +24,7 @@ cantilever:
   loads:
     - dist: {w: 4 kN/m, case: D}
     - point: {p: 10 kN, loc: L, angle: 30, case: L}
-  results: [moment, shear]
+  results: [moment, shear, reactions]
 
 on_springs:
   spans: [3000 mm, 5000 mm, 2000 mm]
@@ -38,5 +40,24 @@ on_springs:
     - point: {p: 12 kN, span_loc: [1, 2000 mm], case: L}
     - point: {p: 6 kN, loc: L, case: L}
   results:
-    diagrams: [forces, rotations]
+    diagrams: [forces, rotations, reactions]
     engine: pynite
+
+factored_floor_beam:
+  spans: [4.2 m, 4.8 m, 3.6 m]
+  e: 200 GPa
+  i: 120e6 mm**4
+  node_labels: auto
+  loads:
+    - pressure: {q: office, trib: 3 m}
+    - point: {p: 18 kN, span_loc: [1, 2.4 m], case: L}
+  occupancies:
+    office: {D: 2.0 kPa, L: 2.4 kPa}
+  load_combos:
+    forces:                         # envelope reactions, shear and moment
+      - ULS1: {D: 1.4}
+      - ULS2: {D: 1.25, L: 1.5}
+      - ULS3: {D: 0.9, L: 1.5}
+    deflections:                    # envelope deflection and rotation
+      - SLS: {D: 1.0, L: 1.0}
+  results: [forces, deflections, reactions]

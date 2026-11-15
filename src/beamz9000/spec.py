@@ -28,9 +28,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from beamz9000 import units
 from beamz9000.scheme import Beam, SupportType
 
-FACTORED = "Factored"
+KeyKind = Literal["case", "occupancy"]
 
-KeyKind = Literal["case", "occupancy", "factored"]
+# What a result line or curve stands for: one load case, or the largest or
+# smallest value over the load combinations.
+Role = Literal["case", "max", "min"]
 
 
 class _Frozen(BaseModel):
@@ -41,7 +43,10 @@ class SpecLoad(_Frozen):
     """One drawn load."""
 
     kind: Literal["point", "moment", "line"]
-    key: str = Field(description="Legend key: a load case, an occupancy, or 'Factored'.")
+    key: Optional[str] = Field(
+        description="Legend key: a load case or an occupancy. None for a load without a case "
+        "(drawn in ink, with no legend entry).",
+    )
     x1: float
     x2: Optional[float] = None
     mag1: float
@@ -66,10 +71,15 @@ class LegendKey(_Frozen):
 
 
 class SpecReaction(_Frozen):
-    """One support's reactions in one load case. Up, right and counter-clockwise are positive."""
+    """
+    One support's reactions in one load case, or its factored max or min over
+    the force combinations. Up, right and counter-clockwise are positive; a
+    max or min line holds each component's max or min.
+    """
 
     node: int
-    key: str = Field(description="The load case, drawn in its legend colour.")
+    key: Optional[str] = Field(description="The load case, drawn in its legend colour; None in ink.")
+    role: Role = "case"
     fy: float
     mz: float = 0.0
     fx: float = 0.0
@@ -77,15 +87,17 @@ class SpecReaction(_Frozen):
 
 
 class SpecCurve(_Frozen):
-    """One load case's values along the beam."""
+    """One load case's values along the beam, or the max or min of an envelope (key None)."""
 
-    key: str
+    key: Optional[str]
+    role: Role = "case"
     x: list[float]
     y: list[float]
 
 
 class SpecPeak(_Frozen):
-    key: str
+    key: Optional[str]
+    role: Role = "case"
     x: float
     y: float
     label: str
@@ -98,7 +110,8 @@ DIAGRAM_TITLES = {"shear": "Shear", "moment": "Moment", "deflection": "Deflectio
 
 class SpecDiagram(_Frozen):
     """
-    A result diagram: one curve per load case, and labelled peaks. Values are
+    A result diagram: one curve per load case, or the max and min curves of an
+    envelope over the load combinations, and labelled peaks. Values are
     as computed (shear up positive, moment sagging positive, deflection up
     positive, rotation counter-clockwise positive); the drawing decides which
     way is up.
@@ -108,6 +121,7 @@ class SpecDiagram(_Frozen):
     title: str
     curves: list[SpecCurve]
     peaks: list[SpecPeak] = Field(default_factory=list)
+    envelope: bool = Field(False, description="True for a factored envelope over the load combinations.")
 
 
 class BeamSpec(_Frozen):
@@ -166,9 +180,9 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
                 loads.append(_combined_occupancy(r.occupancy, parts))
                 keys.setdefault(r.occupancy, "occupancy")
                 continue
-        key = r.case if r.case is not None else FACTORED
-        keys.setdefault(key, "case" if r.case is not None else "factored")
-        loads.append(_spec_load(r, key))
+        if r.case is not None:
+            keys.setdefault(r.case, "case")
+        loads.append(_spec_load(r, r.case))
 
     details = _pressure_details(beam, resolved, keys)
     reactions, diagrams = [], []
@@ -176,9 +190,10 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         result = _analyze(beam)
         if result is not None:
             for case in result.cases:
-                keys.setdefault(case, "factored" if case == FACTORED else "case")
+                if case is not None:
+                    keys.setdefault(case, "case")
             shown = _result_units(beam)
-            reactions = _reactions(result, shown)
+            reactions = _reactions(result, shown) if beam.results.reactions else []
             diagrams = _diagrams(result, beam.results.diagrams, shown, list(keys))
 
     return BeamSpec(
@@ -230,19 +245,32 @@ def _fmt(value: float, kind: str, shown: Optional[dict[str, str]], signed: bool 
     return units.result_label(value, kind, unit, signed)
 
 
+def _reaction_label(fy: float, fx: float, mz: float, shown) -> str:
+    parts = []
+    if fy:
+        parts.append(("↑ " if fy > 0 else "↓ ") + _fmt(fy, "force", shown, signed=False))
+    if fx:
+        parts.append(("→ " if fx > 0 else "← ") + _fmt(fx, "force", shown, signed=False))
+    if mz:
+        parts.append(("↺ " if mz > 0 else "↻ ") + _fmt(mz, "moment", shown, signed=False))
+    return "  ".join(parts) or "0"
+
+
 def _reactions(result, shown) -> list[SpecReaction]:
-    out = []
-    for r in result.reactions:
-        parts = []
-        if r.fy:
-            parts.append(("↑ " if r.fy > 0 else "↓ ") + _fmt(r.fy, "force", shown, signed=False))
-        if r.fx:
-            parts.append(("→ " if r.fx > 0 else "← ") + _fmt(r.fx, "force", shown, signed=False))
-        if r.mz:
-            parts.append(("↺ " if r.mz > 0 else "↻ ") + _fmt(r.mz, "moment", shown, signed=False))
-        if not parts:
-            parts.append("0")
-        out.append(SpecReaction(node=r.node, key=r.case, fy=r.fy, mz=r.mz, fx=r.fx, label="  ".join(parts)))
+    """
+    Each support's reactions per load case and, with force combinations,
+    its factored max and min ('max ↑ 40 kN', 'min ↑ 12 kN').
+    """
+    out = [
+        SpecReaction(node=r.node, key=r.case, fy=r.fy, mz=r.mz, fx=r.fx,
+                     label=_reaction_label(r.fy, r.fx, r.mz, shown))
+        for r in result.reactions if r.case in result.cases
+    ]
+    for env in result.reaction_envelopes():
+        for i, role in enumerate(("max", "min")):
+            fy, mz, fx = env.fy[i], env.mz[i], env.fx[i]
+            out.append(SpecReaction(node=env.node, key=None, role=role, fy=fy, mz=mz, fx=fx,
+                                    label=f"{role} " + _reaction_label(fy, fx, mz, shown)))
     return out
 
 
@@ -251,9 +279,14 @@ _DIAGRAM_UNITS = {"shear": "force", "moment": "moment", "deflection": "length", 
 
 def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
     order = {k: i for i, k in enumerate(key_order)}
-    cases = sorted(result.cases, key=lambda c: order.get(c, len(order)))
+    # Loads without a case (None) first, then the cases in legend order.
+    cases = sorted(result.cases, key=lambda c: -1 if c is None else order.get(c, len(order)))
     out = []
     for kind in kinds:
+        envelope = result.envelope(kind)
+        if envelope is not None:
+            out.append(_envelope_diagram(kind, envelope, shown))
+            continue
         curves = [c for case in cases for c in result.curves if c.quantity == kind and c.case == case]
         if not curves:
             continue
@@ -274,6 +307,21 @@ def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
             peaks=peaks,
         ))
     return out
+
+
+def _envelope_diagram(kind: str, env, shown) -> SpecDiagram:
+    """The max and min curves over the combinations, with the largest and smallest values labelled."""
+    curves = [SpecCurve(key=None, role="max", x=list(env.x), y=list(env.max)),
+              SpecCurve(key=None, role="min", x=list(env.x), y=list(env.min))]
+    biggest = max(max(abs(v) for v in env.max), max(abs(v) for v in env.min))
+    peaks = []
+    for role, ys, pick in (("max", env.max, max), ("min", env.min, min)):
+        i = pick(range(len(ys)), key=lambda j: ys[j])
+        if biggest and abs(ys[i]) >= 0.02 * biggest and (role == "max") == (ys[i] > 0):
+            peaks.append(SpecPeak(key=None, role=role, x=env.x[i], y=ys[i],
+                                  label=_fmt(ys[i], _DIAGRAM_UNITS[kind], shown)))
+    return SpecDiagram(kind=kind, title=f"{DIAGRAM_TITLES[kind]} envelope",
+                       curves=curves, peaks=peaks, envelope=True)
 
 
 def _stiffness_label(support) -> Optional[str]:
@@ -336,7 +384,9 @@ def _pressure_details(beam: Beam, resolved, keys: dict) -> dict[str, str]:
     for r in resolved:
         if r.pressure is None or (r.occupancy is not None and keys.get(r.occupancy) == "occupancy"):
             continue
-        key = r.case if r.case is not None else FACTORED
+        if r.case is None:
+            continue
+        key = r.case
         text = units.label(r.pressure)
         if text not in details.setdefault(key, []):
             details[key].append(text)

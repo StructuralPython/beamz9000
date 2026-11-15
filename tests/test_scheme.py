@@ -24,8 +24,9 @@ def test_example_resolves():
         ("point", 5.75), ("point", 6.5), ("line", 0.0), ("line", 1.0),
         ("line", 4.5), ("line", 4.5), ("moment", 0.0),
     ]
-    assert b.load_combos == {"ULS1": {"D": 1.4}, "ULS2": {"D": 1.25, "L": 1.5}}
+    assert b.load_combos.forces == b.load_combos.deflections == {"ULS1": {"D": 1.4}, "ULS2": {"D": 1.25, "L": 1.5}}
     assert b.results.diagrams == ["moment", "shear", "deflection"]
+    assert b.results.reactions
     assert units.si(b.stiffness) == pytest.approx(200e9 * 300e-6)
 
 
@@ -125,7 +126,13 @@ def test_combo_forms():
     b = beam(load_combos={"A": {"name": "D", "factor": 1.4},
                           "B": [{"name": "D", "factor": 1.2}, {"name": "L", "factor": 1.6}],
                           "C": {"D": 1.0}})
-    assert b.load_combos == {"A": {"D": 1.4}, "B": {"D": 1.2, "L": 1.6}, "C": {"D": 1.0}}
+    assert b.load_combos.forces == {"A": {"D": 1.4}, "B": {"D": 1.2, "L": 1.6}, "C": {"D": 1.0}}
+    assert b.load_combos.deflections == b.load_combos.forces  # A plain list applies to both groups.
+    grouped = beam(load_combos={"forces": [{"ULS": {"D": 1.25, "L": 1.5}}], "deflections": {"SLS": {"D": 1, "L": 1}}})
+    assert grouped.load_combos.forces == {"ULS": {"D": 1.25, "L": 1.5}}
+    assert grouped.load_combos.deflections == {"SLS": {"D": 1.0, "L": 1.0}}
+    only_forces = beam(load_combos={"forces": [{"ULS": {"D": 1.4}}]})
+    assert only_forces.load_combos.deflections == {}
 
 
 def test_yaml_text_and_placeholders():

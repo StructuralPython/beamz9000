@@ -15,7 +15,15 @@ scheme's own units when it uses plain numbers):
   side is pushed up), moment (sagging positive), deflection (up positive) and
   rotation (counter-clockwise positive).
 
-Loads without a `case` are analysed together as the "Factored" case.
+Loads without a `case` form one unnamed case (`None`), taken to be already
+factored. With load combinations, they are left out: they belong to no
+combination.
+
+Load combinations come in two groups (see `scheme.LoadCombos`): `forces`
+combinations envelope the reactions, shear and moment, and `deflections`
+combinations envelope deflection and rotation. Each combination's results are
+included (as reactions and curves whose `case` is the combination's name), and
+`AnalysisResult.envelope()` and `.reaction_envelope()` give their max and min.
 
 Horizontal reactions come from statics: the horizontal components of angled
 loads are carried by the first node that restrains horizontal movement (a pin,
@@ -36,10 +44,11 @@ from typing import Literal, Optional
 import numpy as np
 
 from beamz9000 import units
-from beamz9000.scheme import Beam
+from beamz9000.scheme import COMBO_GROUPS, QUANTITY_GROUP, Beam
 
-FACTORED = "Factored"
 MEMBER = "beam"
+# The engines' name for the unnamed case of loads without a `case`.
+UNCASED = "(no case)"
 
 Engine = Literal["auto", "pycba", "pynite"]
 Quantity = Literal["shear", "moment", "deflection", "rotation"]
@@ -54,8 +63,10 @@ _HORIZONTAL_RESTRAINTS = ("pin", "fixed", "rotational_spring")
 
 @dataclass(frozen=True)
 class Reaction:
+    """A support's reactions in a load case (None: the loads without a case) or combination."""
+
     node: int
-    case: str
+    case: Optional[str]
     fy: float
     mz: float = 0.0
     fx: float = 0.0
@@ -63,24 +74,74 @@ class Reaction:
 
 @dataclass(frozen=True)
 class Curve:
+    """Values along the beam in a load case (None: the loads without a case) or combination."""
+
     quantity: Quantity
-    case: str
+    case: Optional[str]
     x: tuple[float, ...]
     y: tuple[float, ...]
 
 
 @dataclass(frozen=True)
+class Envelope:
+    """The largest and smallest value at each station over a group's combinations."""
+
+    quantity: Quantity
+    x: tuple[float, ...]
+    max: tuple[float, ...]
+    min: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class ReactionEnvelope:
+    """A support's largest and smallest reactions over the force combinations."""
+
+    node: int
+    fy: tuple[float, float]  # (max, min)
+    mz: tuple[float, float] = (0.0, 0.0)
+    fx: tuple[float, float] = (0.0, 0.0)
+
+
+@dataclass(frozen=True)
 class AnalysisResult:
     engine: str
-    cases: list[str]
+    cases: list[Optional[str]]
     reactions: list[Reaction] = field(default_factory=list)
     curves: list[Curve] = field(default_factory=list)
+    combos: dict[str, list[str]] = field(
+        default_factory=dict, metadata={"doc": "Group (forces, deflections) -> combination names analysed."},
+    )
 
-    def curve(self, quantity: str, case: str) -> Curve:
+    def curve(self, quantity: str, case: Optional[str]) -> Curve:
         return next(c for c in self.curves if c.quantity == quantity and c.case == case)
 
-    def reaction(self, node: int, case: str) -> Reaction:
+    def reaction(self, node: int, case: Optional[str]) -> Reaction:
         return next(r for r in self.reactions if r.node == node and r.case == case)
+
+    def combos_for(self, quantity: str) -> list[str]:
+        """The combinations 'quantity' is enveloped over (none: show the cases)."""
+        return self.combos.get(QUANTITY_GROUP[quantity], [])
+
+    def envelope(self, quantity: str) -> Optional[Envelope]:
+        """The max and min of 'quantity' over its group's combinations, or None without any."""
+        curves = [self.curve(quantity, name) for name in self.combos_for(quantity)
+                  if any(c.quantity == quantity and c.case == name for c in self.curves)]
+        if not curves:
+            return None
+        ys = np.array([c.y for c in curves])
+        return Envelope(quantity, curves[0].x, tuple(ys.max(axis=0).tolist()), tuple(ys.min(axis=0).tolist()))
+
+    def reaction_envelopes(self) -> list[ReactionEnvelope]:
+        """Each support's max and min reactions over the force combinations."""
+        names = self.combos_for("reactions")
+        out = []
+        for node in sorted({r.node for r in self.reactions}):
+            rs = [r for r in self.reactions if r.node == node and r.case in names]
+            if not rs:
+                continue
+            span = lambda attr: (max(getattr(r, attr) for r in rs), min(getattr(r, attr) for r in rs))
+            out.append(ReactionEnvelope(node, span("fy"), span("mz"), span("fx")))
+        return out
 
 
 @dataclass(frozen=True)
@@ -88,7 +149,7 @@ class _Load:
     """A load in SI floats: downward forces and counter-clockwise moments positive."""
 
     kind: Literal["point", "moment", "line"]
-    case: str
+    case: Optional[str]
     x1: float
     mag1: float
     x2: float = 0.0
@@ -157,14 +218,15 @@ def analyze(beam: Beam, quantities: Optional[list[str]] = None, engine: Engine =
     model = build_model(beam, engine)
     reactions = _reactions(model, inputs)
     curves = _curves(model, inputs, quantities)
-    return AnalysisResult(engine=engine, cases=inputs.cases, reactions=reactions, curves=curves)
+    combos = {g: list(c) for g, c in inputs.combos.items() if c}
+    return AnalysisResult(engine=engine, cases=inputs.cases, reactions=reactions, curves=curves, combos=combos)
 
 
 def build_model(beam: Beam, engine: Engine = "pycba"):
     """
     Returns the analysed model of 'beam': a pycba-tools CBAModel or a Pynite
     FEModel3D, built with its tools package's `load_dict`. Each load case has
-    a load combination of the same name.
+    a load combination of the same name, beside the scheme's own combinations.
     """
     engine = resolve_engine(engine)
     if engine == "pycba":
@@ -203,7 +265,8 @@ class _Inputs:
     ei: float
     has_stiffness: bool
     loads: list[_Load]
-    cases: list[str]
+    cases: list[Optional[str]]
+    combos: dict[str, dict[str, dict[str, float]]]  # group -> name -> {case: factor}
 
     @classmethod
     def of(cls, beam: Beam) -> "_Inputs":
@@ -219,14 +282,31 @@ class _Inputs:
         if ei is None and springs:
             raise ValueError("a beam on springs needs its stiffness (`e` and `i`, or `ei`) to be analysed")
         loads = _loads(beam)
+        combos = _scheme_combos(beam, {l.case for l in loads})
+        if any(combos.values()):
+            loads = [l for l in loads if l.case is not None]  # In no combination.
+        cases = list(dict.fromkeys(l.case for l in loads))
+        clash = sorted({n for c in combos.values() for n in c} & {c for c in cases if c is not None})
+        if clash:
+            raise ValueError(f"load combination {clash[0]!r} has the name of a load case; rename one")
         return cls(
             nodes=[units.si(n) for n in beam.nodes],
             supports=supports,
             ei=units.si(ei) if ei is not None else 1.0,
             has_stiffness=ei is not None,
             loads=loads,
-            cases=list(dict.fromkeys(l.case for l in loads)),
+            cases=cases,
+            combos=combos,
         )
+
+    @property
+    def all_combos(self) -> dict[str, dict[str, float]]:
+        """Every combination to build in the model: one per case, then the scheme's own."""
+        out = {_name(c): {_name(c): 1.0} for c in self.cases}
+        for group in self.combos.values():
+            for name, factors in group.items():
+                out[name] = {_name(c): f for c, f in factors.items()}
+        return out
 
     @property
     def names(self) -> list[str]:
@@ -239,10 +319,35 @@ class _Inputs:
         return restrained[0] if restrained else None
 
 
+def _name(case: Optional[str]) -> str:
+    """A case's name in the engines' models."""
+    return UNCASED if case is None else case
+
+
+def _scheme_combos(beam: Beam, cases: set) -> dict[str, dict[str, dict[str, float]]]:
+    """
+    The scheme's combinations per group, limited to `results.combos` if given.
+    Factors on cases no load uses are dropped (a standard set of combinations
+    may name cases a beam lacks), and so are combinations left empty.
+    """
+    wanted = beam.results.combos
+    out = {}
+    for group in COMBO_GROUPS:
+        combos = {}
+        for name, factors in beam.load_combos.group(group).items():
+            if wanted is not None and name not in wanted:
+                continue
+            used = {c: float(f) for c, f in factors.items() if c in cases}
+            if used:
+                combos[name] = used
+        out[group] = combos
+    return out
+
+
 def _loads(beam: Beam) -> list[_Load]:
     out = []
     for r in beam.resolved_loads:
-        case = r.case if r.case is not None else FACTORED
+        case = r.case
         if r.kind == "line":
             out.append(_Load("line", case, units.si(r.x1), units.si(r.mag1), units.si(r.x2), units.si(r.mag2)))
         else:
@@ -250,8 +355,8 @@ def _loads(beam: Beam) -> list[_Load]:
     return out
 
 
-def _combos(cases: list[str]) -> dict:
-    return {case: {"name": case, "factors": {case: 1.0}} for case in cases}
+def _combos(inputs: _Inputs) -> dict:
+    return {name: {"name": name, "factors": factors} for name, factors in inputs.all_combos.items()}
 
 
 # --- pycba-tools schema ------------------------------------------------------------------
@@ -271,9 +376,9 @@ def _pycba_dict(inputs: _Inputs) -> dict:
         }[s.type]
     nodes = inputs.nodes
     spans = [b - a for a, b in zip(nodes, nodes[1:])]
-    cases: dict[str, list] = {case: [] for case in inputs.cases}
+    cases: dict[str, list] = {_name(case): [] for case in inputs.cases}
     for l in inputs.loads:
-        cases[l.case] += _pycba_rows(l, nodes)
+        cases[_name(l.case)] += _pycba_rows(l, nodes)
     return {
         "backend": "pycba",
         "name": MEMBER,
@@ -285,7 +390,7 @@ def _pycba_dict(inputs: _Inputs) -> dict:
         "eletype": [1] * len(spans),
         "D": [None] * len(R),
         "load_cases": cases,
-        "load_combos": _combos(inputs.cases),
+        "load_combos": _combos(inputs),
     }
 
 
@@ -338,13 +443,13 @@ def _pynite_dict(inputs: _Inputs) -> dict:
     pt_loads, dist_loads = [], []
     for l in inputs.loads:
         if l.kind == "point":
-            pt_loads.append(["FY", -l.vertical, l.x1, l.case])
+            pt_loads.append(["FY", -l.vertical, l.x1, _name(l.case)])
             if l.horizontal:
-                pt_loads.append(["FX", l.horizontal, l.x1, l.case])
+                pt_loads.append(["FX", l.horizontal, l.x1, _name(l.case)])
         elif l.kind == "moment":
-            pt_loads.append(["MZ", l.mag1, l.x1, l.case])
+            pt_loads.append(["MZ", l.mag1, l.x1, _name(l.case)])
         else:
-            dist_loads.append(["FY", -l.mag1, -l.mag2, l.x1, l.x2, l.case, False])
+            dist_loads.append(["FY", -l.mag1, -l.mag2, l.x1, l.x2, _name(l.case), False])
     return {
         "nodes": nodes,
         "materials": {"material": material},
@@ -357,7 +462,7 @@ def _pynite_dict(inputs: _Inputs) -> dict:
                 "PtLoads": pt_loads, "DistLoads": dist_loads,
             }
         },
-        "load_combos": _combos(inputs.cases),
+        "load_combos": _combos(inputs),
     }
 
 
@@ -372,15 +477,20 @@ def _reactions(model, inputs: _Inputs) -> list[Reaction]:
     else:
         import pynite_tools as tools
     tree = tools.extract_node_reactions(model, results_key=None)
+    fx_case = {c: -sum(l.horizontal for l in inputs.loads if l.case == c and l.kind == "point")
+               for c in inputs.cases}
+    # Each case, then each force combination: (reported case, engine name, horizontal total).
+    rows = [(c, _name(c), fx_case[c]) for c in inputs.cases]
+    rows += [(name, name, sum(f * fx_case[c] for c, f in factors.items()))
+             for name, factors in inputs.combos["forces"].items()]
     out = []
-    for case in inputs.cases:
-        fx_total = -sum(l.horizontal for l in inputs.loads if l.case == case and l.kind == "point")
+    for case, key, fx_total in rows:
         for i, (name, s) in enumerate(zip(inputs.names, inputs.supports)):
             if s.type == "free":
                 continue
             node = tree.get(name, {})
-            fy = float(node.get("FY", {}).get(case, 0.0))
-            mz = float(node.get("MZ", {}).get(case, 0.0)) if s.type in ("fixed", "rotational_spring") else 0.0
+            fy = float(node.get("FY", {}).get(key, 0.0))
+            mz = float(node.get("MZ", {}).get(key, 0.0)) if s.type in ("fixed", "rotational_spring") else 0.0
             fx = fx_total if i == inputs.x_restraint else 0.0
             out.append(Reaction(i, case, _clean(fy), _clean(mz), _clean(fx)))
     return out
@@ -400,31 +510,34 @@ def _curves(model, inputs: _Inputs, quantities) -> list[Curve]:
     """Curves along the beam, from the member view both tools packages share."""
     if not quantities:
         return []
-    nodes, cases = inputs.nodes, inputs.cases
+    nodes = inputs.nodes
     member = model.members[MEMBER]
     xs = _stations(nodes, inputs.loads)
     local = xs - nodes[0]
     n = len(xs)
-    out = []
-    for case in cases:
-        values = {}
-        if "shear" in quantities:
-            values["shear"] = member.shear_array("Fy", n, case, x_array=local)[1]
-        if "moment" in quantities:
+
+    def values(q: str, key: str) -> np.ndarray:
+        if q == "shear":
+            return member.shear_array("Fy", n, key, x_array=local)[1]
+        if q == "moment":
             # Pynite's Mz is negative in sagging; diagrams show sagging positive.
-            values["moment"] = -member.moment_array("Mz", n, case, x_array=local)[1]
-        if "deflection" in quantities:
-            values["deflection"] = member.deflection_array("dy", n, case, x_array=local)[1]
-        if "rotation" in quantities:
-            # The slope of the deflected shape, from an even grid (the deflection
-            # is smooth, so the paired stations at jumps only add noise).
-            grid = np.linspace(local[0], local[-1], 4 * _STATIONS + 1)
-            dy = member.deflection_array("dy", len(grid), case, x_array=grid)[1]
-            values["rotation"] = np.interp(local, grid, np.gradient(dy, grid, edge_order=2))
-        for q in quantities:
-            if q in values:
-                y = np.asarray(values[q], dtype=float)
-                out.append(Curve(q, case, tuple(xs.tolist()), tuple(np.where(np.abs(y) < 1e-12, 0.0, y).tolist())))
+            return -member.moment_array("Mz", n, key, x_array=local)[1]
+        if q == "deflection":
+            return member.deflection_array("dy", n, key, x_array=local)[1]
+        # Rotation: the slope of the deflected shape, from an even grid (the
+        # deflection is smooth, so the paired stations at jumps only add noise).
+        grid = np.linspace(local[0], local[-1], 4 * _STATIONS + 1)
+        dy = member.deflection_array("dy", len(grid), key, x_array=grid)[1]
+        return np.interp(local, grid, np.gradient(dy, grid, edge_order=2))
+
+    out = []
+    for q in quantities:
+        # A quantity with combinations in its group: each combination; else each case.
+        combos = inputs.combos[QUANTITY_GROUP[q]]
+        rows = [(name, name) for name in combos] if combos else [(c, _name(c)) for c in inputs.cases]
+        for case, key in rows:
+            y = np.asarray(values(q, key), dtype=float)
+            out.append(Curve(q, case, tuple(xs.tolist()), tuple(np.where(np.abs(y) < 1e-12, 0.0, y).tolist())))
     return out
 
 
