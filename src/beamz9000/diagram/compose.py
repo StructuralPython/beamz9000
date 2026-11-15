@@ -379,7 +379,7 @@ def result_panel(spec: BeamSpec, layout: Layout, diagram: SpecDiagram) -> Group:
     """
     One result diagram with its axis on y = 0: a curve per load case (or the
     max and min curves of an envelope, in ink) filled to the axis, the peaks
-    labelled, the title to the left of the axis, and faint lines at the
+    labelled, the title and peak values in a row above, and faint lines at the
     supports. Moment is drawn on the tension side unless the layout says
     otherwise.
     """
@@ -409,26 +409,36 @@ def result_panel(spec: BeamSpec, layout: Layout, diagram: SpecDiagram) -> Group:
         parts.append(Shape(geometry=LineString(pts), stroke_color=color(c.key),
                            stroke_width=layout.result_stroke_width, z=Z_RESULT, key=c.key))
 
-    # Each peak gets a dot on its curve; the values go in a column to the right,
-    # one line per load case ("max / min"), centred on the axis.
+    # Each peak gets a dot on its curve. The title and the values (one entry
+    # per load case, "max / min") go in a row above the diagram, wrapping where
+    # a row would pass the beam's right end, so nothing widens the drawing.
     r = 0.22 * fs  # Peak dots are sized like the text.
-    lines = []
+    entries = [(None, diagram.title)]
     for c in diagram.curves:
         peaks = [p for p in diagram.peaks if p.key == c.key and p.role == c.role]
         for peak in peaks:
             parts.append(Shape(geometry=shapely.Point(peak.x, k * peak.y).buffer(r),
                                fill_color=color(c.key), stroke_color=None, z=Z_RESULT, key=c.key))
         if peaks and c.role != "case":
-            lines.append((c.key, f"{c.role} {peaks[0].label}"))
+            entries.append((c.key, f"{c.role} {peaks[0].label}"))
         elif peaks:
             values = sorted(peaks, key=lambda p: -p.y)
-            lines.append((c.key, " / ".join(p.label for p in values)))
+            entries.append((c.key, " / ".join(p.label for p in values)))
+    rows, x = [[]], x0
+    for key, text in entries:
+        t = label(text, (x, 0), layout, L, ha="left", va="bottom",
+                  color=color(key), key=key)
+        if rows[-1] and t.bounds[2] > x1:
+            x = x0
+            rows.append([])
+            t = label(text, (x, 0), layout, L, ha="left", va="bottom", color=color(key), key=key)
+        rows[-1].append(t)
+        x = t.bounds[2] + 3 * gap
     pitch = layout.reaction_line * fs
-    y = (len(lines) - 1) * pitch / 2
-    for key, text in lines:
-        parts.append(label(text, (x1 + 3 * gap, y), layout, L, ha="left", va="center", color=color(key), key=key))
+    y = max(hi, 0) + 2 * gap + (len(rows) - 1) * pitch
+    for row in rows:
+        parts += [translate(t, dy=y) for t in row]
         y -= pitch
-    parts.append(label(diagram.title, (x0 - 3 * gap, 0), layout, L, ha="right", va="center"))
     return group(parts, role="result", key=diagram.kind)
 
 

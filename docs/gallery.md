@@ -81,7 +81,8 @@ in the legend.
 ## Everything at once
 
 The starter example uses every load type, global and span-relative locations,
-an occupancy, unfactored and factored loads, and load combinations.
+an occupancy, unfactored and factored loads, and separate load combinations
+for forces and deflections.
 
 ```{literalinclude} ../examples/beam_scheme.yaml
 :language: yaml
