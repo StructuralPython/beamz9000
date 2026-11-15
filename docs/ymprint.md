@@ -68,10 +68,85 @@ one-beam {class}`~beamz9000.scheme.Scheme`.
 | `legend` | | `auto`, `right`, `top` or `none`. Without it, the scheme's `display: {legend: ...}`, else `auto`. |
 | `caption` | | A caption under the diagram, in the report's image caption style. |
 | `environment` | `structural` | The forallpeople environment for an inline beam. |
+| `namespace` | the beam's id | The variable the analysis results go in (see {ref}`ymprint-results`). |
 | `layout` | | Any other {class}`~beamz9000.diagram.layout.Layout` setting, e.g. `{palette: ["#000", "#c00"]}`. |
 
 Mistakes are reported as ymprint block errors that name the block, e.g.
 `Block '_beam_c1': load 1 (point) at 9 m is off the beam (length 3 m)`.
+
+(ymprint-results)=
+## Results in the document
+
+When the scheme asks for `results`, the block analyses the beam once, draws
+the results, and puts them in the document's variables under the beam's id
+(for an inline beam, its `id`, else the block's id, e.g. `c1` for `_beam_c1`),
+or under `namespace`. The rest of the document can then use them:
+
+```yaml
+Beam B1:
+  - _beam:
+      scheme: analysis.yaml
+      beam: factored_floor_beam
+      namespace: fb
+  - "The largest reaction at B is {{ fb.reactions.B.max.Fy | round(1) }} {{ fb.units.force }}."
+```
+
+The values are in the units the scheme uses (`units` says which). For
+`factored_floor_beam` the variable holds:
+
+```python
+{
+  "engine": "pycba",
+  "units": {"force": "kN", "moment": "kN·m", "deflection": "mm", "rotation": "rad", "x": "m"},
+  "cases": ["D", "L"],
+  "combos": {"forces": ["ULS1", "ULS2", "ULS3"], "deflections": ["SLS"]},
+  "reactions": {
+    "A": {"D": {"Fy": 9.6, "Mz": 0.0, "Fx": 0.0}, "L": {...}, "ULS1": {...}, ...,
+          "max": {"Fy": 26.9, ...}, "min": {...}},
+    ...
+  },
+  "shear": {"ULS1": {"max": ..., "x_max": ..., "min": ..., "x_min": ...}, ..., "envelope": {...}},
+  "moment": {...},
+  "deflection": {"SLS": {...}, "envelope": {...}},
+  "model": <the analysed pycba-tools CBAModel or Pynite FEModel3D>,
+}
+```
+
+- Supports are keyed by their node label, or `N0`, `N1`, ... without one.
+  Loads without a `case` are under `uncased`.
+- Each result asked for lists each load case, or, when its group has load
+  combinations, each combination and their `envelope`, as `max` and `min`
+  with where along the beam they occur (`x_max`, `x_min`). Moment is positive
+  sagging. Reactions list each case, each force combination, then their `max`
+  and `min`.
+- `units` is null for a scheme in plain numbers.
+
+### Exporting the results and the model
+
+Everything but `model` is plain numbers, strings, lists and dicts, so the
+variable can be exported as it is:
+
+```yaml
+_export:
+  fb: $fb
+```
+
+`model` is exported too: beamz9000 registers a ymprint export serializer that
+writes it with its tools package's `dump_dict`. The JSON is the model's input
+data with a `metadata` block naming the library and the versions that wrote it:
+
+```json
+"metadata": {"library": "pycba", "library_version": "1.0.2",
+             "generator": "pycba-tools", "generator_version": "0.2.0"}
+```
+
+A document that reads the export back through `_data` gets a model again,
+built with the tools package's `load_dict` (call `analyze()` on it for
+results). To export only the model, give it its own variable in a `_py` block
+(`source: fb_model = fb["model"]`) and export `$fb_model`.
+
+The results come from {func}`beamz9000.results.results_dict`, which can be
+used outside ymprint with {func}`beamz9000.analysis.analyze`.
 
 ## In your own application
 

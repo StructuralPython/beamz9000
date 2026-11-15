@@ -39,7 +39,7 @@ from __future__ import annotations
 import importlib.util
 import math
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import numpy as np
 
@@ -110,6 +110,10 @@ class AnalysisResult:
     curves: list[Curve] = field(default_factory=list)
     combos: dict[str, list[str]] = field(
         default_factory=dict, metadata={"doc": "Group (forces, deflections) -> combination names analysed."},
+    )
+    model: Any = field(
+        default=None, repr=False, compare=False,
+        metadata={"doc": "The analysed model (a pycba-tools CBAModel or a Pynite FEModel3D); None without loads."},
     )
 
     def curve(self, quantity: str, case: Optional[str]) -> Curve:
@@ -219,7 +223,8 @@ def analyze(beam: Beam, quantities: Optional[list[str]] = None, engine: Engine =
     reactions = _reactions(model, inputs)
     curves = _curves(model, inputs, quantities)
     combos = {g: list(c) for g, c in inputs.combos.items() if c}
-    return AnalysisResult(engine=engine, cases=inputs.cases, reactions=reactions, curves=curves, combos=combos)
+    return AnalysisResult(engine=engine, cases=inputs.cases, reactions=reactions, curves=curves, combos=combos,
+                          model=model)
 
 
 def build_model(beam: Beam, engine: Engine = "pycba"):
