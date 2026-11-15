@@ -16,7 +16,7 @@ EXAMPLES = pathlib.Path(__file__).parents[1] / "examples"
 
 @pytest.fixture(scope="module")
 def spec():
-    return from_scheme(bz.load_scheme(EXAMPLES / "beam_scheme.yaml")["B1"], "B1")
+    return from_scheme(bz.load_scheme(EXAMPLES / "beam_scheme.yaml")["B1"], "B1", analyze=False)
 
 
 def _part(diagram, role):

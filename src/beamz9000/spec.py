@@ -12,10 +12,15 @@ engineer's display units.
 
 Sign conventions: positive forces act downward; positive moments are
 counter-clockwise.
+
+When the scheme lists `results`, the beam is analysed (see
+`beamz9000.analysis`) and the spec also carries each support's reactions per
+load case and the result diagrams, with the labels to draw.
 """
 
 from __future__ import annotations
 
+import warnings
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,6 +57,51 @@ class LegendKey(_Frozen):
     kind: KeyKind
 
 
+class SpecReaction(_Frozen):
+    """One support's reactions in one load case. Up, right and counter-clockwise are positive."""
+
+    node: int
+    key: str = Field(description="The load case, drawn in its legend colour.")
+    fy: float
+    mz: float = 0.0
+    fx: float = 0.0
+    label: str = Field(description="The reactions as drawn, e.g. '↑ 12.3 kN  ↺ 4.5 kN·m'.")
+
+
+class SpecCurve(_Frozen):
+    """One load case's values along the beam."""
+
+    key: str
+    x: list[float]
+    y: list[float]
+
+
+class SpecPeak(_Frozen):
+    key: str
+    x: float
+    y: float
+    label: str
+
+
+DiagramKind = Literal["shear", "moment", "deflection", "rotation"]
+
+DIAGRAM_TITLES = {"shear": "Shear", "moment": "Moment", "deflection": "Deflection", "rotation": "Rotation"}
+
+
+class SpecDiagram(_Frozen):
+    """
+    A result diagram: one curve per load case, and labelled peaks. Values are
+    as computed (shear up positive, moment sagging positive, deflection up
+    positive, rotation counter-clockwise positive); the drawing decides which
+    way is up.
+    """
+
+    kind: DiagramKind
+    title: str
+    curves: list[SpecCurve]
+    peaks: list[SpecPeak] = Field(default_factory=list)
+
+
 class BeamSpec(_Frozen):
     """Everything a beam diagram needs, as plain values."""
 
@@ -67,6 +117,8 @@ class BeamSpec(_Frozen):
     keys: list[LegendKey] = Field(default_factory=list, description="Legend keys in drawing order.")
     span_labels: list[str]
     length_label: str
+    reactions: list[SpecReaction] = Field(default_factory=list, description="From an analysis, if any.")
+    diagrams: list[SpecDiagram] = Field(default_factory=list, description="Result diagrams, in order.")
 
     @property
     def length(self) -> float:
@@ -77,7 +129,8 @@ class BeamSpec(_Frozen):
         return [b - a for a, b in zip(self.nodes, self.nodes[1:])]
 
 
-def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool = False) -> BeamSpec:
+def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool = False,
+                analyze: bool = True) -> BeamSpec:
     """
     Returns the BeamSpec for a scheme Beam.
 
@@ -85,6 +138,10 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
     occupancy's key, at the occupancy's total pressure. With
     'split_occupancies', it is drawn as one load per case under each case's
     key instead.
+
+    With 'analyze' and `results` in the scheme, the beam is analysed and the
+    spec carries its reactions and result diagrams. Without an analysis
+    engine installed, it is drawn without them, with a warning.
     """
     loads: list[SpecLoad] = []
     keys: dict[str, KeyKind] = {}
@@ -105,6 +162,16 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         keys.setdefault(key, "case" if r.case is not None else "factored")
         loads.append(_spec_load(r, key))
 
+    reactions, diagrams = [], []
+    if analyze and beam.results.requested:
+        result = _analyze(beam)
+        if result is not None:
+            for case in result.cases:
+                keys.setdefault(case, "factored" if case == FACTORED else "case")
+            shown = _result_units(beam)
+            reactions = _reactions(result, shown)
+            diagrams = _diagrams(result, beam.results.diagrams, shown, list(keys))
+
     return BeamSpec(
         name=name,
         nodes=[units.si(n) for n in beam.nodes],
@@ -116,7 +183,88 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         keys=[LegendKey(name=k, kind=v) for k, v in keys.items()],
         span_labels=[units.label(s) for s in beam.spans],
         length_label=units.label(beam.length),
+        reactions=reactions,
+        diagrams=diagrams,
     )
+
+
+# --- Results ----------------------------------------------------------------------------
+
+
+def _analyze(beam: Beam):
+    from beamz9000 import analysis
+
+    try:
+        return analysis.analyze(beam, list(beam.results.diagrams), beam.results.engine)
+    except ImportError as err:
+        warnings.warn(f"{err}; drawing the beam without results", stacklevel=3)
+        return None
+
+
+def _result_units(beam: Beam) -> Optional[dict[str, str]]:
+    """Display units for results, or None for a scheme in plain numbers."""
+    if not any(units.is_quantity(s) for s in beam.spans):
+        return None
+    values: dict[str, list] = {"length": list(beam.spans)}
+    for load in beam.loads:
+        kind = {"point": "force", "moment": "moment", "dist": "line_load", "pressure": "pressure"}[load.type]
+        values.setdefault(kind, []).extend(v for k, v in load if k.startswith("mag") and units.is_quantity(v))
+    for pressures in beam.occupancies.values():
+        values.setdefault("pressure", []).extend(pressures.values())
+    return units.result_units(values)
+
+
+def _fmt(value: float, kind: str, shown: Optional[dict[str, str]], signed: bool = True) -> str:
+    unit = None if shown is None else shown["rotation" if kind == "rotation" else kind]
+    if kind == "rotation" and unit is not None:
+        return f"{units.result_label(value, kind, None, signed)} rad"
+    return units.result_label(value, kind, unit, signed)
+
+
+def _reactions(result, shown) -> list[SpecReaction]:
+    out = []
+    for r in result.reactions:
+        parts = []
+        if r.fy:
+            parts.append(("↑ " if r.fy > 0 else "↓ ") + _fmt(r.fy, "force", shown, signed=False))
+        if r.fx:
+            parts.append(("→ " if r.fx > 0 else "← ") + _fmt(r.fx, "force", shown, signed=False))
+        if r.mz:
+            parts.append(("↺ " if r.mz > 0 else "↻ ") + _fmt(r.mz, "moment", shown, signed=False))
+        if not parts:
+            parts.append("0")
+        out.append(SpecReaction(node=r.node, key=r.case, fy=r.fy, mz=r.mz, fx=r.fx, label="  ".join(parts)))
+    return out
+
+
+_DIAGRAM_UNITS = {"shear": "force", "moment": "moment", "deflection": "length", "rotation": "rotation"}
+
+
+def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
+    order = {k: i for i, k in enumerate(key_order)}
+    cases = sorted(result.cases, key=lambda c: order.get(c, len(order)))
+    out = []
+    for kind in kinds:
+        curves = [c for case in cases for c in result.curves if c.quantity == kind and c.case == case]
+        if not curves:
+            continue
+        biggest = max((abs(v) for c in curves for v in c.y), default=0.0)
+        peaks = []
+        for c in curves:
+            for pick in (max, min):
+                i = pick(range(len(c.y)), key=lambda j: c.y[j])
+                value = c.y[i]
+                if biggest == 0 or abs(value) < 0.02 * biggest:
+                    continue
+                if any(p.key == c.case and p.x == c.x[i] for p in peaks):
+                    continue
+                peaks.append(SpecPeak(key=c.case, x=c.x[i], y=value, label=_fmt(value, _DIAGRAM_UNITS[kind], shown)))
+        out.append(SpecDiagram(
+            kind=kind, title=DIAGRAM_TITLES[kind],
+            curves=[SpecCurve(key=c.case, x=list(c.x), y=list(c.y)) for c in curves],
+            peaks=peaks,
+        ))
+    return out
 
 
 def _stiffness_label(support) -> Optional[str]:

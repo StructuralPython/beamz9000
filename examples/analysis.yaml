@@ -1,0 +1,42 @@
+# Beams with analysis results: listing anything under `results` analyses the
+# beam (with pycba-tools or pynite-tools) and draws each support's reactions
+# for every load case, plus the diagrams asked for.
+_environment: structural
+
+floor_beam:
+  spans: [4.2 m, 4.8 m, 3.6 m]
+  e: 200 GPa
+  i: 120e6 mm**4
+  node_labels: auto
+  loads:
+    - pressure: {q: office, trib: 3 m}
+    - point: {p: 18 kN, span_loc: [1, 2.4 m], case: L}
+  occupancies:
+    office: {D: 2.0 kPa, L: 2.4 kPa}
+  results: [forces, deflections]
+
+cantilever:
+  spans: [3000 mm]
+  cantilever: right                 # fixed at the left end
+  node_labels: [A, B]
+  loads:
+    - dist: {w: 4 kN/m, case: D}
+    - point: {p: 10 kN, loc: L, angle: 30, case: L}
+  results: [moment, shear]
+
+on_springs:
+  spans: [3000 mm, 5000 mm, 2000 mm]
+  ei: 60000 kN*m**2
+  node_labels: auto
+  supports:
+    - rotational_spring: 8000 kN*m
+    - roller
+    - spring: 12 kN/mm
+    - free
+  loads:
+    - dist: {w: 3 kN/m, case: D}
+    - point: {p: 12 kN, span_loc: [1, 2000 mm], case: L}
+    - point: {p: 6 kN, loc: L, case: L}
+  results:
+    diagrams: [forces, rotations]
+    engine: pynite

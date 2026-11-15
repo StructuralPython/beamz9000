@@ -287,8 +287,50 @@ def _combo(value: Any) -> Any:
     return value
 
 
+# What may be listed under `results`, and the diagrams each one asks for.
+_RESULT_NAMES = {
+    "forces": ["shear", "moment"],
+    "shear": ["shear"],
+    "moment": ["moment"],
+    "deflection": ["deflection"],
+    "deflections": ["deflection"],
+    "rotation": ["rotation"],
+    "rotations": ["rotation"],
+}
+
+
+def _diagram_names(value: Any) -> Any:
+    """Expands result names (`forces`, `deflections`, ...) to diagram names, in order."""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return value
+    out = []
+    for name in value:
+        key = name.strip().lower() if isinstance(name, str) else name
+        if key not in _RESULT_NAMES:
+            raise ValueError(
+                f"unknown result {name!r}; use any of: {', '.join(_RESULT_NAMES)}"
+            )
+        out += [d for d in _RESULT_NAMES[key] if d not in out]
+    return out
+
+
 class Results(_Model):
-    diagrams: list[Diagram] = Field(default_factory=list)
+    """
+    What to analyse and draw. Any results at all mean the beam is analysed,
+    and the diagram shows each support's reactions for each load case.
+    """
+
+    diagrams: Annotated[list[Diagram], BeforeValidator(_diagram_names)] = Field(
+        default_factory=list,
+        description="Diagrams to draw below the beam: forces (shear and moment), shear, "
+        "moment, deflection(s), rotation(s).",
+    )
+    engine: Literal["pycba", "pynite", "auto"] = Field(
+        "pycba", description="Analysis engine: pycba (the default, through pycba-tools), pynite "
+        "(through pynite-tools), or auto (pycba if installed, else pynite).",
+    )
     combos: Optional[list[str]] = Field(
         None, description="Combinations to show; all of them if not given."
     )
@@ -296,10 +338,20 @@ class Results(_Model):
     @model_validator(mode="before")
     @classmethod
     def _merge_items(cls, data):
-        # Accepts `- diagrams: [...]` (a list of single-key items) as well as a mapping.
+        # `results: [forces, deflections]` names the diagrams. `- diagrams: [...]`
+        # (a list of single-key items) is read like a mapping.
+        if isinstance(data, str):
+            return {"diagrams": [data]}
         if isinstance(data, list):
+            if all(isinstance(item, str) for item in data):
+                return {"diagrams": data}
             return _single_key_items(data, "results")
         return data
+
+    @property
+    def requested(self) -> bool:
+        """True if anything is listed, so the beam is analysed."""
+        return bool(self.diagrams)
 
 
 # --- Resolved loads ---------------------------------------------------------

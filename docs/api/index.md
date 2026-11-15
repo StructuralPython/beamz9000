@@ -6,6 +6,7 @@
 top-level
 scheme
 spec
+analysis
 diagram
 graphics
 render
