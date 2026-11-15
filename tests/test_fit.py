@@ -136,3 +136,39 @@ def test_overall_dimension_clears_span_labels(width):
     spans = [t for t in texts if t is not overall]
     span_line = next(s for s in flatten(_part(diagram, "dimensions")) if isinstance(s, Shape))
     assert overall.bounds[3] < min(span_line.bounds[1], *(t.bounds[1] for t in spans))
+
+
+def _scheme(text):
+    import yaml
+    return bz.parse_scheme(yaml.safe_load(text))
+
+
+def _legend_role_bounds(diagram):
+    parts = {c.role: c for c in diagram.children}
+    return parts.get("legend"), parts["beam"]
+
+
+def test_scheme_display_legend_top():
+    scheme = _scheme(
+        "B:\n  spans: [4]\n  loads: [{dist: {w: 2, case: D}}]\n  display: {legend: top}\n"
+    )
+    legend, beam = _legend_role_bounds(bz.beam_diagram(scheme))
+    assert legend.bounds[1] > beam.bounds[3]  # Above the beam, not beside it.
+    # A Layout that sets the placement wins over the scheme.
+    legend, beam = _legend_role_bounds(bz.beam_diagram(scheme, bz.Layout(legend_position="right")))
+    assert legend.bounds[0] > beam.bounds[2]
+
+
+def test_scheme_display_legend_none():
+    for value in ("none", "false"):
+        scheme = _scheme(
+            f"B:\n  spans: [4]\n  loads: [{{dist: {{w: 2, case: D}}}}]\n  display: {{legend: {value}}}\n"
+        )
+        legend, _ = _legend_role_bounds(bz.beam_diagram(scheme))
+        assert legend is None or not len(legend)
+
+
+def test_scheme_display_rejects_unknown_options():
+    import pydantic
+    with pytest.raises(pydantic.ValidationError):
+        _scheme("B:\n  spans: [4]\n  display: {legend: left}\n")

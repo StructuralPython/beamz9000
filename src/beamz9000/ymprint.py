@@ -86,7 +86,9 @@ class BeamBlock(BaseModel):
         "before it is fitted to that height instead.",
     )
     font_size: float = Field(9.0, gt=0, description="Text size, in points.")
-    legend: Literal["auto", "right", "top", "none"] = "auto"
+    legend: Optional[Literal["auto", "right", "top", "none"]] = Field(
+        None, description="Legend placement. Without it, the scheme's `display.legend`, else auto.",
+    )
     caption: Optional[str] = None
     layout: dict = Field(default_factory=dict, description="Any other diagram Layout settings.")
 
@@ -104,12 +106,12 @@ def beam_block(block_key: str, block_value: Any, context: dict) -> list:
     try:
         block = BeamBlock.model_validate(block_value or {})
         spec = _spec(block, block_key, context)
-        layout = Layout(**{
-            **block.layout,
-            "font_size_pt": block.font_size,
-            "legend": block.legend != "none",
-            "legend_position": "auto" if block.legend == "none" else block.legend,
-        })
+        legend = {}
+        if block.legend == "none":
+            legend = {"legend": False}
+        elif block.legend is not None:
+            legend = {"legend_position": block.legend}
+        layout = Layout(**{**block.layout, "font_size_pt": block.font_size, **legend})
     except (ValidationError, ValueError, TypeError) as err:
         raise BlockError(block_key, f"Block {block_key!r}: {_message(err)}") from err
 

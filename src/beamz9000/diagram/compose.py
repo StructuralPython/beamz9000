@@ -594,7 +594,8 @@ def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = 
     stretched within `layout.stretch` toward the target shape and, with
     `legend_position="auto"`, the legend goes on top when that leaves the
     diagram larger than a legend on the right. 'margin' is the renderer's
-    margin (× drawing width), counted in the fit.
+    margin (× drawing width), counted in the fit. A scheme's `display.legend` sets the
+    legend's placement unless 'layout' sets `legend` or `legend_position`.
 
     'width' is the output width in points. With it and `layout.font_size_pt`,
     the text is sized in points: the diagram is arranged again until its text
@@ -602,7 +603,7 @@ def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = 
     legend swatches) scale with the text.
     """
     spec = as_spec(obj, beam_id)
-    layout = layout or Layout()
+    layout = _scheme_legend(spec, layout or Layout())
     if width is None or layout.font_size_pt is None:
         return _arrange(spec, layout, aspect, margin)
     if width <= 0:
@@ -620,6 +621,18 @@ def beam_diagram(obj, layout: Optional[Layout] = None, beam_id: Optional[str] = 
             break
         factor *= layout.font_size_pt / points
     return diagram
+
+
+def _scheme_legend(spec: BeamSpec, layout: Layout) -> Layout:
+    """
+    'layout' with the scheme's legend placement, unless the layout sets
+    `legend` or `legend_position` itself.
+    """
+    if spec.legend is None or layout.model_fields_set & {"legend", "legend_position"}:
+        return layout
+    if spec.legend == "none":
+        return layout.model_copy(update={"legend": False})
+    return layout.model_copy(update={"legend_position": spec.legend})
 
 
 def _arrange(spec: BeamSpec, layout: Layout, aspect: Optional[float], margin: float) -> Group:

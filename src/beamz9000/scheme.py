@@ -42,6 +42,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    field_validator,
     model_validator,
 )
 
@@ -486,6 +487,22 @@ SupportIn = Annotated[Support, BeforeValidator(_support_item)]
 # --- Beam ---------------------------------------------------------------------
 
 
+class Display(_Model):
+    """
+    How a beam is drawn. A Layout passed to the drawing functions that sets the
+    same thing wins over it.
+    """
+
+    legend: Optional[Literal["auto", "right", "top", "none"]] = Field(
+        None, description="Where the legend goes: `auto`, `right`, `top` or `none` (or false).",
+    )
+
+    @field_validator("legend", mode="before")
+    @classmethod
+    def _legend(cls, value):
+        return {False: "none", True: "auto"}.get(value, value) if isinstance(value, bool) else value
+
+
 class Beam(_Model):
     """One beam: its spans, supports, stiffness, loads and what to report."""
 
@@ -511,6 +528,7 @@ class Beam(_Model):
     occupancies: dict[str, dict[str, Pressure]] = Field(default_factory=dict)
     load_combos: LoadCombos = Field(default_factory=LoadCombos)
     results: Results = Field(default_factory=Results)
+    display: Display = Field(default_factory=Display, description="How the beam is drawn.")
 
     @model_validator(mode="before")
     @classmethod
@@ -522,7 +540,7 @@ class Beam(_Model):
             data["occupancies"] = _single_key_items(data["occupancies"], "occupancies")
         if data.get("loads") is None:
             data.pop("loads", None)
-        for key in ("supports", "e", "i", "ei", "cantilever", "results", "depth", "node_labels", "labels"):
+        for key in ("supports", "e", "i", "ei", "cantilever", "results", "depth", "node_labels", "labels", "display"):
             if key in data and (data[key] is None or data[key] is ... or data[key] == "..."):
                 data.pop(key)
         return data

@@ -92,7 +92,9 @@ diagram = bz.beam_diagram("beams.yaml", aspect=6.5 / 2.5)
 ```
 
 Set `legend_position="right"` or `"top"` to fix the legend's place, and
-`stretch=(1, 1)` to keep the layout's proportions.
+`stretch=(1, 1)` to keep the layout's proportions. A scheme can also fix it per
+beam with `display: {legend: top}` (see {ref}`display`); a `Layout` that sets
+`legend` or `legend_position` wins over the scheme.
 
 ## Text size in points
 

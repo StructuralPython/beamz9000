@@ -141,6 +141,9 @@ class BeamSpec(_Frozen):
     length_label: str
     reactions: list[SpecReaction] = Field(default_factory=list, description="From an analysis, if any.")
     diagrams: list[SpecDiagram] = Field(default_factory=list, description="Result diagrams, in order.")
+    legend: Optional[Literal["auto", "right", "top", "none"]] = Field(
+        None, description="The scheme's `display.legend`, used unless the Layout sets its own.",
+    )
 
     @property
     def length(self) -> float:
@@ -209,6 +212,7 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         length_label=units.label(beam.length),
         reactions=reactions,
         diagrams=diagrams,
+        legend=beam.display.legend,
     )
 
 

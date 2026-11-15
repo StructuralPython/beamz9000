@@ -29,6 +29,8 @@ B1:
     - ULS2: {D: 1.25, L: 1.5}
   results:
     diagrams: [moment, shear, deflection, reactions]
+  display:
+    legend: top              # optional; auto | right | top | none
 ```
 
 ## Locations
@@ -114,6 +116,19 @@ supports:
 - `results` analyses the beam: list any of `reactions`, `forces`, `shear`,
   `moment`, `deflection(s)`, `rotation(s)`, or write
   `{diagrams: [...], engine: pynite}`. See {doc}`analysis`.
+
+(display)=
+## Display
+
+`display` holds options for how the beam is drawn:
+
+| Key | Values | Means |
+|---|---|---|
+| `legend` | `auto` (default), `right`, `top`, `none` (or `false`) | Where the legend goes. `auto` puts it on the right unless the drawing is fitted to a size where it fits better on top. |
+
+A {class}`~beamz9000.diagram.layout.Layout` passed to `draw` or `beam_diagram`
+that sets the same thing (`legend_position`, `legend`) wins over the scheme, as
+does a ymprint block's `legend`.
 
 ## Validation
 
