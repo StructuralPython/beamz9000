@@ -38,9 +38,10 @@ bz.draw("drawing_features.yaml", "B2.svg", beam_id="B2")
   Labels show the units you wrote.
 - **Helpful validation.** Errors name the load and the problem: `load 3
   (dist): it must end after it starts`.
-- **Analysis built in.** List `results: [forces, deflections]` and the beam is
-  analysed with pycba or PyniteFEA: reactions under every support for each
-  load case, and shear, moment, deflection and rotation diagrams below.
+- **Analysis built in.** List `results: [forces, deflections, reactions]` and
+  the beam is analysed with pycba or PyniteFEA: shear, moment, deflection and
+  rotation diagrams below, and reactions under every support. Per load case,
+  or as factored envelopes over your load combinations.
 - **Diagrams that read the same every time.** Loads are drawn in bands per load
   case or occupancy, above the beam, then the supports and the dimensions, with
   a colour-blind-safe legend.

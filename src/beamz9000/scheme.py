@@ -287,6 +287,59 @@ def _combo(value: Any) -> Any:
     return value
 
 
+# Combination groups: each result is enveloped over one group's combinations.
+COMBO_GROUPS = ("forces", "deflections")
+_GROUP_ALIASES = {"forces": "forces", "force": "forces", "deflections": "deflections", "deflection": "deflections"}
+# The group each result is enveloped over.
+QUANTITY_GROUP = {"shear": "forces", "moment": "forces", "reactions": "forces",
+                  "deflection": "deflections", "rotation": "deflections"}
+
+
+def _combo_map(value: Any, what: str) -> dict[str, dict[str, float]]:
+    return {k: _combo(v) for k, v in _single_key_items(value, what).items()}
+
+
+class LoadCombos(_Model):
+    """
+    Load combinations by result group, each {name: {case: factor}}. `forces`
+    combinations envelope reactions, shear and moment; `deflections`
+    combinations envelope deflection and rotation.
+
+    A plain list (or mapping) of combinations applies to both groups. With
+    `forces:` and/or `deflections:` subkeys, each group has its own.
+    """
+
+    forces: dict[str, dict[str, float]] = Field(default_factory=dict)
+    deflections: dict[str, dict[str, float]] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _groups(cls, data):
+        if isinstance(data, LoadCombos) or data is None:
+            return data or {}
+        if isinstance(data, dict) and data and set(data) <= set(_GROUP_ALIASES):
+            out = {}
+            for key, value in data.items():
+                group = _GROUP_ALIASES[key]
+                if group in out:
+                    raise ValueError(f"load_combos names {group!r} twice")
+                out[group] = _combo_map(value, f"load_combos: {key}")
+            return out
+        combos = _combo_map(data, "load_combos")
+        return {"forces": combos, "deflections": dict(combos)}
+
+    def __bool__(self) -> bool:
+        return bool(self.forces or self.deflections)
+
+    def group(self, name: str) -> dict[str, dict[str, float]]:
+        """The combinations of group 'name' (forces or deflections)."""
+        return getattr(self, name)
+
+    def for_quantity(self, quantity: str) -> dict[str, dict[str, float]]:
+        """The combinations a result (shear, moment, reactions, deflection, rotation) is enveloped over."""
+        return self.group(QUANTITY_GROUP[quantity])
+
+
 # What may be listed under `results`, and the diagrams each one asks for.
 _RESULT_NAMES = {
     "forces": ["shear", "moment"],
@@ -296,6 +349,7 @@ _RESULT_NAMES = {
     "deflections": ["deflection"],
     "rotation": ["rotation"],
     "rotations": ["rotation"],
+    "reactions": [],  # Not a diagram: sets `reactions`.
 }
 
 
@@ -318,8 +372,9 @@ def _diagram_names(value: Any) -> Any:
 
 class Results(_Model):
     """
-    What to analyse and draw. Any results at all mean the beam is analysed,
-    and the diagram shows each support's reactions for each load case.
+    What to analyse and draw. Anything listed means the beam is analysed:
+    diagrams below the beam, and the reactions under each support if
+    `reactions` is listed.
     """
 
     diagrams: Annotated[list[Diagram], BeforeValidator(_diagram_names)] = Field(
@@ -327,6 +382,7 @@ class Results(_Model):
         description="Diagrams to draw below the beam: forces (shear and moment), shear, "
         "moment, deflection(s), rotation(s).",
     )
+    reactions: bool = Field(False, description="Draw each support's reactions under it.")
     engine: Literal["pycba", "pynite", "auto"] = Field(
         "pycba", description="Analysis engine: pycba (the default, through pycba-tools), pynite "
         "(through pynite-tools), or auto (pycba if installed, else pynite).",
@@ -341,17 +397,25 @@ class Results(_Model):
         # `results: [forces, deflections]` names the diagrams. `- diagrams: [...]`
         # (a list of single-key items) is read like a mapping.
         if isinstance(data, str):
-            return {"diagrams": [data]}
+            data = [data]
         if isinstance(data, list):
             if all(isinstance(item, str) for item in data):
-                return {"diagrams": data}
-            return _single_key_items(data, "results")
+                data = {"diagrams": data}
+            else:
+                data = _single_key_items(data, "results")
+        if isinstance(data, dict) and "diagrams" in data:
+            # `reactions` may be listed with the diagrams.
+            names = [data["diagrams"]] if isinstance(data["diagrams"], str) else data["diagrams"]
+            if isinstance(names, list):
+                listed = [n for n in names if isinstance(n, str) and n.strip().lower() == "reactions"]
+                if listed:
+                    data = {**data, "diagrams": [n for n in names if n not in listed], "reactions": True}
         return data
 
     @property
     def requested(self) -> bool:
         """True if anything is listed, so the beam is analysed."""
-        return bool(self.diagrams)
+        return bool(self.diagrams) or self.reactions
 
 
 # --- Resolved loads ---------------------------------------------------------
@@ -445,7 +509,7 @@ class Beam(_Model):
     )
     loads: list[Load] = Field(default_factory=list)
     occupancies: dict[str, dict[str, Pressure]] = Field(default_factory=dict)
-    load_combos: dict[str, dict[str, float]] = Field(default_factory=dict)
+    load_combos: LoadCombos = Field(default_factory=LoadCombos)
     results: Results = Field(default_factory=Results)
 
     @model_validator(mode="before")
@@ -456,9 +520,6 @@ class Beam(_Model):
         data = dict(data)
         if "occupancies" in data:
             data["occupancies"] = _single_key_items(data["occupancies"], "occupancies")
-        if "load_combos" in data:
-            combos = _single_key_items(data["load_combos"], "load_combos")
-            data["load_combos"] = {k: _combo(v) for k, v in combos.items()}
         if data.get("loads") is None:
             data.pop("loads", None)
         for key in ("supports", "e", "i", "ei", "cantilever", "results", "depth", "node_labels", "labels"):

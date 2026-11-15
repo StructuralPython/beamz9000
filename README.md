@@ -69,7 +69,7 @@ B1:
     - ULS1: {name: D, factor: 1.4}
     - ULS2: {D: 1.25, L: 1.5}
   results:
-    diagrams: [moment, shear, deflection]
+    diagrams: [moment, shear, deflection, reactions]
 ```
 
 ### Locations
@@ -171,12 +171,18 @@ diagram into any ReportLab document as vector graphics with searchable text.
 - `occupancies` and `load_combos` accept a list of `- name: {...}` items or a
   plain mapping.
 - A combination is `{name: D, factor: 1.4}`, a list of those, or
-  `{D: 1.25, L: 1.5}`.
+  `{D: 1.25, L: 1.5}`. A plain list applies to every result; `forces:` and
+  `deflections:` subkeys give reactions/shear/moment and deflection/rotation
+  their own combinations.
+- A load without a `case` is already factored: it has no legend entry and is
+  left out of load combinations.
 - `results` analyses the beam with pycba-tools or pynite-tools (the `pycba`
-  and `pynite` extras): list any of `forces`, `shear`, `moment`,
+  and `pynite` extras): list any of `reactions`, `forces`, `shear`, `moment`,
   `deflection(s)`, `rotation(s)`, or write `{diagrams: [...], engine: pynite}`.
-  The diagram then shows each support's reactions per load case, and the
-  result diagrams below, with positive moment on the tension side.
+  Result diagrams are drawn below the beam, with positive moment on the
+  tension side, and `reactions` adds each support's reactions under it.
+  Without load combinations each load case is drawn; with them, results are
+  factored envelopes (max and min), and reactions add factored max and min.
 
 ### Validation
 

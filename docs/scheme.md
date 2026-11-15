@@ -28,7 +28,7 @@ B1:
     - ULS1: {name: D, factor: 1.4}
     - ULS2: {D: 1.25, L: 1.5}
   results:
-    diagrams: [moment, shear, deflection]
+    diagrams: [moment, shear, deflection, reactions]
 ```
 
 ## Locations
@@ -106,10 +106,14 @@ supports:
 - `occupancies` and `load_combos` accept a list of `- name: {...}` items or a
   plain mapping.
 - A combination is `{name: D, factor: 1.4}`, a list of those, or
-  `{D: 1.25, L: 1.5}`.
-- `results` analyses the beam: list any of `forces`, `shear`, `moment`,
-  `deflection(s)`, `rotation(s)`, or write `{diagrams: [...], engine: pynite}`.
-  See {doc}`analysis`.
+  `{D: 1.25, L: 1.5}`. A plain list of combinations applies to every result;
+  `forces:` and `deflections:` subkeys give each group its own (see
+  {ref}`load-combinations`).
+- A load without a `case` is already factored: it has no legend entry, and
+  it is left out of load combinations.
+- `results` analyses the beam: list any of `reactions`, `forces`, `shear`,
+  `moment`, `deflection(s)`, `rotation(s)`, or write
+  `{diagrams: [...], engine: pynite}`. See {doc}`analysis`.
 
 ## Validation
 
