@@ -39,6 +39,12 @@ missing the font substitutes another and labels may sit slightly off.
 For ReportLab documents, `beamz9000.render.reportlab.ReportLabRenderer` draws
 a diagram as a platypus Flowable or a one-page PDF (see {doc}`ymprint`).
 
+Line weights are set for an output 12 in wide. A narrower output thins every
+line in proportion (to no less than 0.25 pt), so a small image keeps the
+proportions of a large one: the beam does not swamp the drawing, and arrow
+shafts stay slim next to their heads. Pass `line_scale` to any renderer to set
+the factor yourself; `line_scale=1` keeps the layout's weights at any size.
+
 `MatplotlibRenderer.figure()` returns a matplotlib `Figure` for further work,
 and `to_bytes()` returns the encoded file without writing it.
 

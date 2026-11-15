@@ -42,7 +42,7 @@ class Layout(BaseModel):
 
     # Text
     font_family: str = "DejaVu Sans"
-    font_size: float = Field(0.018, description="Text height, × beam length.")
+    font_size: float = Field(0.02, description="Text height, × beam length.")
     font_size_pt: Optional[float] = Field(
         None, gt=0,
         description="Text height in points. Used instead of font_size when the output "
@@ -52,7 +52,7 @@ class Layout(BaseModel):
     label_gap: float = Field(0.25, description="Gap between a glyph and its label, in em.")
 
     # Beam and supports
-    glyph_width: float = 0.04
+    glyph_width: float = 0.048
     beam_stroke_width: float = Field(4.0, description="Beam line weight when it has no depth.")
     beam_fill: str = "#f2f2f2"
     beam_outline_width: float = Field(1.5, description="Beam outline weight when it has a depth.")

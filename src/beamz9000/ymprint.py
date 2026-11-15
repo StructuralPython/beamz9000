@@ -85,7 +85,7 @@ class BeamBlock(BaseModel):
         description="Without a height: the most of the available height the diagram may take "
         "before it is fitted to that height instead.",
     )
-    font_size: float = Field(8.0, gt=0, description="Text size, in points.")
+    font_size: float = Field(9.0, gt=0, description="Text size, in points.")
     legend: Literal["auto", "right", "top", "none"] = "auto"
     caption: Optional[str] = None
     layout: dict = Field(default_factory=dict, description="Any other diagram Layout settings.")

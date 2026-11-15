@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from shapely.geometry.base import BaseGeometry
 
 from beamz9000.graphics import text as shaping
-from beamz9000.render.frame import frame
+from beamz9000.render.frame import frame, line_factor, line_weight
 from beamz9000.graphics.elements import Element, Shape, Text, flatten
 
 _DASHES = {"solid": "solid", "dashed": (0, (6, 4)), "dotted": (0, (1, 3)), "dashdot": (0, (6, 3, 1, 3))}
@@ -101,6 +101,11 @@ class MatplotlibRenderer(BaseModel):
     )
     margin: float = Field(0.02, ge=0, description="Margin around the drawing, × drawing width.")
     background: Optional[str] = "white"
+    line_scale: Optional[float] = Field(
+        None, gt=0,
+        description="Factor on every line weight. None thins lines in proportion when the output "
+        "is narrower than 12 in, so small images keep the proportions of large ones.",
+    )
 
     def figure(self, element: Element) -> Figure:
         """Returns a matplotlib Figure with 'element' drawn on it."""
@@ -129,11 +134,13 @@ class MatplotlibRenderer(BaseModel):
         face = _rgba(s.fill_color, s.fill_opacity) if closed else "none"
         patch = PathPatch(
             path, facecolor=face, edgecolor=_rgba(s.stroke_color, s.stroke_opacity),
-            linewidth=s.stroke_width if s.stroke_color is not None else 0,
+            linewidth=line_weight(s.stroke_width, line_factor(self.width_pt, self.line_scale))
+            if s.stroke_color is not None else 0,
             linestyle=_DASHES[s.line_type], zorder=s.z, capstyle="round", joinstyle="round",
         )
         if s.hatch and closed:
             patch.set_hatch(s.hatch)
+            patch.set_hatch_linewidth(line_weight(_RC["hatch.linewidth"], line_factor(self.width_pt, self.line_scale)))
             patch.set_hatchcolor(_rgba(s.stroke_color or "black", s.stroke_opacity))
         ax.add_patch(patch)
 

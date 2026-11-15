@@ -100,8 +100,9 @@ def test_top_legend_wraps_to_the_drawing_width():
         "loads": [{"point": {"p": 1, "loc": 500, "case": f"Case {i}"}} for i in range(8)],
     }})
     diagram = bz.beam_diagram(scheme, bz.Layout(legend_position="top"))
-    legend, beam = _part(diagram, "legend"), _part(diagram, "beam")
-    assert legend.bounds[2] <= beam.bounds[2] + 1e-6
+    legend = _part(diagram, "legend")
+    drawing_right = max(c.bounds[2] for c in diagram.children if c.role != "legend")
+    assert legend.bounds[2] <= drawing_right + 1e-6
     rows = {round(c.bounds[1], 6) for c in legend.children}
     assert len(rows) > 1
 
