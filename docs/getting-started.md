@@ -7,12 +7,12 @@ beamz9000 needs Python 3.12 or later.
 ::::{tab-set}
 :::{tab-item} uv
 ```bash
-uv add git+https://github.com/StructuralPython/beamz9000
+uv add beamz9000
 ```
 :::
 :::{tab-item} pip
 ```bash
-pip install git+https://github.com/StructuralPython/beamz9000
+pip install beamz9000
 ```
 :::
 ::::
@@ -23,7 +23,7 @@ Save this as `beams.yaml`:
 
 ```{literalinclude} ../examples/gallery.yaml
 :language: yaml
-:lines: 1-11
+:end-before: "propped_cantilever:"
 ```
 
 `_environment: structural` lets you write quantities such as `6 m` and
