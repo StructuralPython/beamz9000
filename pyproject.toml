@@ -1,6 +1,6 @@
 [project]
 name = "beamz9000"
-version = "0.4.0"
+dynamic = ["version"]
 description = "Beam free-body diagrams from a simple YAML scheme, drawn through shapely geometry."
 readme = "README.md"
 license = "Apache-2.0"
@@ -41,8 +41,14 @@ _beam = "beamz9000.ymprint:beam_block"
 beamz9000 = "beamz9000.ymprint:setup"
 
 [build-system]
-requires = ["uv_build>=0.9.14,<0.12"]
-build-backend = "uv_build"
+requires = ["flit_core>=3.12,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "beamz9000"
+
+[tool.flit.sdist]
+exclude = ["**/.ipynb_checkpoints"]
 
 [dependency-groups]
 dev = [

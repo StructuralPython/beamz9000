@@ -19,9 +19,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
       - name: Check the release tag matches the version
-        # A release tagged v0.2.0 (or 0.2.0) must publish version 0.2.0.
+        # A release tagged v0.2.0 (or 0.2.0) must publish version 0.2.0. flit
+        # takes the version from __version__ in src/beamz9000/__init__.py.
         run: |
-          version=$(uv version --short)
+          version=$(sed -n 's/^__version__ = "\([^"]*\)".*/\1/p' src/beamz9000/__init__.py)
           tag="${GITHUB_REF_NAME#v}"
           if [ "$tag" != "$version" ]; then
             echo "::error::Release tag $GITHUB_REF_NAME does not match the package version $version"

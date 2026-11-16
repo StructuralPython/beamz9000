@@ -77,7 +77,6 @@ wheels = [
 
 [[package]]
 name = "beamz9000"
-version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "forallpeople" },
@@ -134,7 +133,7 @@ requires-dist = [
     { name = "shapely", specifier = ">=2.1" },
     { name = "ymprint", marker = "python_full_version >= '3.14' and extra == 'ymprint'", specifier = ">=0.13.0" },
 ]
-provides-extras = ["reportlab", "ymprint", "pycba", "pynite"]
+provides-extras = ["pycba", "pynite", "reportlab", "ymprint"]
 
 [package.metadata.requires-dev]
 dev = [
