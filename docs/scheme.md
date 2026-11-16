@@ -100,6 +100,10 @@ supports:
   length, use forallpeople's units.
 - Load labels show the magnitude without a sign, because the arrow shows the
   direction. The zero end of a triangular load has no label.
+- Line loads of the same case that follow on end to end, meeting at the same
+  magnitude, are drawn as one load: a polyline (e.g. a run of trapezoids from a
+  load tracer) is one band, labelled at its ends, peaks and bends where the
+  labels fit. Loads with their own `label` are always drawn on their own.
 - `node_labels` are drawn in bold on one line under the lowest support.
 - See {doc}`gallery` for depth, springs, angled loads and node labels together.
 
