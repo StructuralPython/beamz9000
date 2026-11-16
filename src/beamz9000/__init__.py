@@ -19,12 +19,8 @@ from beamz9000.graphics.elements import Group, Shape, Text
 from beamz9000.render import MatplotlibRenderer, SVGRenderer
 from beamz9000.scheme import Beam, Scheme, load_scheme, parse_scheme
 from beamz9000.spec import BeamSpec, from_scheme
-from importlib import metadata as _metadata
 
-try:
-    __version__ = _metadata.version("beamz9000")
-except _metadata.PackageNotFoundError:  # Not installed, e.g. run from a source tree.
-    __version__ = "0+unknown"
+__version__ = "0.4.1"  # flit builds the package with this version; bump it for a release.
 
 
 def draw(obj, path: Union[str, pathlib.Path], layout: Optional[Layout] = None,
