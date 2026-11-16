@@ -171,3 +171,11 @@ def test_typeset_units():
     assert _typeset("300e6 mm**4") == "300e6 mm⁴"
     assert _typeset("5 kN * m") == "5 kN·m"
     assert _typeset("2 m**-1") == "2 m⁻¹"
+
+
+def test_version_matches_the_package_metadata():
+    from importlib.metadata import version
+
+    import beamz9000
+
+    assert beamz9000.__version__ == version("beamz9000")
