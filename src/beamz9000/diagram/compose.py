@@ -24,8 +24,9 @@ from __future__ import annotations
 import math
 import pathlib
 
+import numpy as np
 import shapely
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, MultiLineString, MultiPolygon, Polygon
 from dataclasses import dataclass
 from typing import Optional
 
@@ -258,6 +259,123 @@ def load_item(load: SpecLoad, scale: _Scale, color: str, layout: Layout) -> Grou
     return group(parts, key=load.key, role="load")
 
 
+def line_chains(loads: list[SpecLoad], tol: float) -> list[list[SpecLoad]]:
+    """
+    'loads' grouped into chains: line loads of the same legend key that
+    follow on end to end, meeting at the same magnitude, in the same direction
+    and of the same kind (area or not). A polyline load, given as a run of
+    trapezoids, is one chain. Loads with their own label, and every other
+    load, are chains of one. 'tol' is the length tolerance for "end to end".
+    """
+    chains: list[list[SpecLoad]] = []
+    open_ends: list[list[SpecLoad]] = []  # Chains that may still grow.
+    for load in sorted(loads, key=lambda l: (l.kind != "line", l.x1)):
+        if load.kind == "line" and not load.labelled:
+            for chain in open_ends:
+                last = chain[-1]
+                biggest = max(abs(last.mag2), abs(load.mag1), 1e-300)
+                if (last.key == load.key
+                        and abs(last.x2 - load.x1) <= tol
+                        and abs(last.mag2 - load.mag1) <= 1e-6 * biggest
+                        and _upward(last) == _upward(load)
+                        and last.area_load == load.area_load):
+                    chain.append(load)
+                    break
+            else:
+                chain = [load]
+                chains.append(chain)
+                open_ends.append(chain)
+        else:
+            chains.append([load])
+    # Back in the order the loads were given, by each chain's first load.
+    order = {id(l): i for i, l in enumerate(loads)}
+    return sorted(chains, key=lambda c: order[id(c[0])])
+
+
+def _upward(load: SpecLoad) -> bool:
+    return load.mag1 < 0 and (load.mag2 or 0) <= 0
+
+
+def chain_item(chain: list[SpecLoad], scale: _Scale, color: str, layout: Layout) -> Group:
+    """
+    A chain of line loads (see line_chains) drawn as one load: one region
+    under the polyline through its ends and joints, evenly spaced arrows, and
+    labels at its ends and bends where they fit: the ends first, then the
+    bends, largest first.
+    """
+    L = scale.length
+    gap = layout.label_gap * _font_size(layout, L)
+    hl, hw = scale.size(layout.head_length), scale.size(layout.head_width)
+    # Vertices: the start of each piece, then the end of the last.
+    xs = [l.x1 for l in chain] + [chain[-1].x2]
+    mags = [l.mag1 for l in chain] + [chain[-1].mag2]
+    texts = [l.label1 for l in chain] + [chain[-1].label2 or chain[-1].label1]
+    hs = [scale.line(m) for m in mags]
+    upward = _upward(chain[0])
+
+    region = Polygon([(xs[0], 0.0), *zip(xs, hs), (xs[-1], 0.0)])
+    shafts, heads = [], []
+    for x in glyphs.arrow_stations(xs[0], xs[-1], scale.size(layout.arrow_spacing)):
+        h = float(np.interp(x, xs, hs))
+        tail, tip = ((x, 0.0), (x, h)) if upward else ((x, h), (x, 0.0))
+        shaft, head = glyphs.arrow(tail, tip, hl, hw)
+        if not shaft.is_empty:
+            shafts.append(shaft)
+        if not head.is_empty:
+            heads.append(head)
+    parts: list = [
+        Shape(geometry=region, fill_color=color, fill_opacity=layout.load_fill_opacity,
+              hatch=layout.area_load_hatch if chain[0].area_load else None,
+              stroke_color=color, stroke_width=layout.load_stroke_width, z=Z_LOAD_FILL),
+        Shape(geometry=MultiLineString(shafts), stroke_color=color,
+              stroke_width=layout.load_stroke_width * 0.8, z=Z_LOAD),
+        Shape(geometry=MultiPolygon(heads), fill_color=color, stroke_color=None, z=Z_LOAD),
+    ]
+
+    n = len(xs) - 1
+    biggest = max(max(abs(m) for m in mags), 1e-300)
+    if all(abs(m - mags[0]) <= 1e-6 * biggest for m in mags):
+        # Uniform: one label, centred, as for a uniform load.
+        parts.append(label(texts[0], ((xs[0] + xs[-1]) / 2, max(hs) + gap), layout, L, color=color))
+        return group(parts, key=chain[0].key, role="load")
+
+    def bend(i: int) -> bool:
+        """True where the polyline changes slope at vertex i."""
+        s1 = (mags[i] - mags[i - 1]) / (xs[i] - xs[i - 1])
+        s2 = (mags[i + 1] - mags[i]) / (xs[i + 1] - xs[i])
+        return abs(s1 - s2) * L > 1e-6 * biggest
+
+    def top(a: float, b: float) -> float:
+        """The polyline's highest point between x = a and x = b."""
+        inside = [h for x, h in zip(xs, hs) if a < x < b]
+        return max([*np.interp([a, b], xs, hs).tolist(), *inside])
+
+    order = [0, n] + sorted((i for i in range(1, n) if bend(i)), key=lambda i: -abs(mags[i]))
+    def flat_run(i: int, j: int) -> bool:
+        """True when the polyline is level from vertex i to vertex j."""
+        a, b = sorted((i, j))
+        return all(abs(m - mags[a]) <= 1e-6 * biggest for m in mags[a:b + 1])
+
+    placed: list[Text] = []
+    labelled: list[int] = []
+    for i in order:
+        if any(flat_run(i, j) for j in labelled):
+            continue  # A level stretch is labelled once.
+        ha = "left" if i == 0 else "right" if i == n else "center"
+        # Clear of the polyline across the label's whole width.
+        sized = label(texts[i], (xs[i], 0.0), layout, L, ha=ha)
+        y = top(sized.bounds[0], sized.bounds[2]) + gap
+        text = label(texts[i], (xs[i], y), layout, L, ha=ha, color=color)
+        b = text.bounds
+        if any(b[0] < p.bounds[2] + gap and p.bounds[0] < b[2] + gap
+               and b[1] < p.bounds[3] and p.bounds[1] < b[3] for p in placed):
+            continue
+        placed.append(text)
+        labelled.append(i)
+    parts += placed
+    return group(parts, key=chain[0].key, role="load")
+
+
 def pack_rows(extents: list[tuple[float, float]], gap: float) -> list[int]:
     """
     Returns a row index for each (x_min, x_max) extent: each goes, in order,
@@ -288,15 +406,21 @@ def key_color(spec: BeamSpec, layout: Layout, key: Optional[str]) -> str:
 def load_bands(spec: BeamSpec, layout: Layout, base: float = 0.0) -> Group:
     """
     The loads, in one band per legend key stacked upward from 'base' (loads
-    without a case have a band of their own). Each band packs its loads into
-    as many rows as needed to avoid overlaps.
+    without a case have a band of their own). Line loads that follow on end to
+    end are drawn as one (see line_chains). Each band packs its loads into as
+    many rows as needed to avoid overlaps.
     """
     scale = _scale_for(spec, layout)
     y = base + scale.size(layout.beam_clearance)
     bands = []
     for key in dict.fromkeys(l.key for l in spec.loads):
         color = key_color(spec, layout, key)
-        items = [load_item(l, scale, color, layout) for l in spec.loads if l.key == key]
+        loads = [l for l in spec.loads if l.key == key]
+        items = [
+            load_item(chain[0], scale, color, layout) if len(chain) == 1
+            else chain_item(chain, scale, color, layout)
+            for chain in line_chains(loads, 1e-6 * spec.length)
+        ]
         if not items:
             continue
         rows = pack_rows([(i.bounds[0], i.bounds[2]) for i in items], scale.size(layout.item_gap))

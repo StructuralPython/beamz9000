@@ -55,6 +55,7 @@ class SpecLoad(_Frozen):
     label2: Optional[str] = Field(None, description="Label for the end of a varying line load.")
     area_load: bool = Field(False, description="True for line loads from pressures (drawn hatched).")
     angle: float = Field(0.0, description="Point loads: degrees from vertical; + tilts the tail CCW.")
+    labelled: bool = Field(False, description="True when the scheme gave the load its own `label`.")
 
 
 class LegendKey(_Frozen):
@@ -345,7 +346,8 @@ def _stiffness_label(support) -> Optional[str]:
 def _spec_load(r, key: str) -> SpecLoad:
     common = dict(kind=r.kind, key=key, x1=units.si(r.x1), mag1=units.si(r.mag1))
     if r.kind != "line":
-        return SpecLoad(**common, label1=r.label or units.magnitude_label(r.mag1), angle=r.angle)
+        return SpecLoad(**common, label1=r.label or units.magnitude_label(r.mag1), angle=r.angle,
+                        labelled=r.label is not None)
     mag2 = units.si(r.mag2)
     if r.pressure is not None:
         labels = (r.label, None) if r.label is not None else _trib_labels(r.trib1, r.trib2)
@@ -355,7 +357,7 @@ def _spec_load(r, key: str) -> SpecLoad:
         labels = (units.magnitude_label(r.mag1), units.magnitude_label(r.mag2))
     return SpecLoad(
         **common, x2=units.si(r.x2), mag2=mag2, label1=labels[0], label2=labels[1],
-        area_load=r.pressure is not None,
+        area_load=r.pressure is not None, labelled=r.label is not None,
     )
 
 
@@ -368,7 +370,7 @@ def _combined_occupancy(occupancy: str, parts) -> SpecLoad:
     return SpecLoad(
         kind="line", key=occupancy, x1=units.si(first.x1), x2=units.si(first.x2),
         mag1=units.si(mag1), mag2=units.si(mag2),
-        label1=label1, label2=label2, area_load=True,
+        label1=label1, label2=label2, area_load=True, labelled=first.label is not None,
     )
 
 
