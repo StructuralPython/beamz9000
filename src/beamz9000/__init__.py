@@ -20,7 +20,7 @@ from beamz9000.render import MatplotlibRenderer, SVGRenderer
 from beamz9000.scheme import Beam, Scheme, load_scheme, parse_scheme
 from beamz9000.spec import BeamSpec, from_scheme
 
-__version__ = "0.4.1"  # flit builds the package with this version; bump it for a release.
+__version__ = "0.4.2"  # flit builds the package with this version; bump it for a release.
 
 
 def draw(obj, path: Union[str, pathlib.Path], layout: Optional[Layout] = None,
