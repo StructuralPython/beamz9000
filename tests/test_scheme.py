@@ -179,3 +179,18 @@ def test_version_matches_the_package_metadata():
     import beamz9000
 
     assert beamz9000.__version__ == version("beamz9000")
+
+
+def test_parse_keeps_top_level_units():
+    # A host (e.g. a ymprint _py_preamble) loads its units into builtins;
+    # parsing a scheme in the same environment must not remove them.
+    import builtins
+
+    import forallpeople as fp
+
+    fp.environment("structural", top_level=True)
+    try:
+        parse_scheme({"_environment": "structural", "B1": {"spans": ["1.5 m", "1.5 m"]}})
+        assert hasattr(builtins, "kN")
+    finally:
+        fp.environment("structural", top_level=False)
