@@ -822,9 +822,28 @@ def parse_scheme(data: dict) -> Scheme:
     if env is not None:
         import forallpeople as fp
 
-        fp.environment(env, top_level=False)
+        _use_environment(fp, env)
         data = units.keep_sources(data, fp.parse_tree(data, strict=True))
     return Scheme(environment=env, beams=data)
+
+
+def _use_environment(fp, env: str) -> None:
+    """
+    Loads the forallpeople environment 'env' unless it is already loaded.
+
+    forallpeople's environment is a singleton: loading one removes the unit
+    names the last load put in its namespace, so loading with top_level=False
+    would take `kN` etc. out of builtins when the host (e.g. a ymprint
+    `_py_preamble`) loaded them with top_level=True. A needed reload keeps the
+    host's choice of namespace.
+    """
+    import builtins
+
+    environment = fp.environment
+    if getattr(environment, "_env_name", None) == pathlib.Path(env).stem:
+        return
+    top_level = getattr(environment, "push_module", None) is builtins
+    environment(env, top_level=top_level)
 
 
 def load_scheme(source: Union[str, pathlib.Path]) -> Scheme:
