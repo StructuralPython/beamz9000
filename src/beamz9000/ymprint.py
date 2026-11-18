@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import pathlib
 import re
-import warnings
 from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -42,12 +41,11 @@ from ymprint import Ymprint
 from ymprint.blocks import blockstyles, content_box
 from ymprint.errors import BlockError
 
-from beamz9000 import analysis
 from beamz9000.diagram import Layout, beam_diagram
 from beamz9000.render.reportlab import ReportLabRenderer
 from beamz9000.results import results_dict
 from beamz9000.scheme import Beam, Scheme, load_scheme, parse_scheme
-from beamz9000.spec import BeamSpec, from_scheme
+from beamz9000.spec import BeamSpec, analyze_beam, from_scheme
 
 BLOCK_CODE = "_beam"
 
@@ -111,10 +109,12 @@ def beam_block(block_key: str, block_value: Any, context: dict) -> list:
     """
     try:
         block = BeamBlock.model_validate(block_value or {})
-        beam, name, result = _beam(block, block_key, context)
-        # Analysed at most once: the drawing reuses the result.
+        beam, name, result, notice = _beam(block, block_key, context)
+        # Analysed at most once: the drawing reuses the result (or the notice
+        # that no engine is installed).
         spec = beam if isinstance(beam, BeamSpec) else from_scheme(
-            beam, name=name, analyze=result is not None, result=result)
+            beam, name=name, analyze=result is not None or bool(notice), result=result,
+            notice=notice)
         if result is not None and "vars" in context:
             context["vars"][block.namespace or name] = results_dict(beam, result)
         legend = {}
@@ -160,19 +160,16 @@ def _diagram(spec: BeamSpec, layout: Layout, renderer: ReportLabRenderer):
 
 def _beam(block: BeamBlock, block_key: str, context: dict):
     """
-    Returns (beam, name, analysis result): a scheme Beam (or a BeamSpec passed
-    in), its id, and its analysis when the scheme asks for results and an
-    engine is installed (else None).
+    Returns (beam, name, analysis result, notice): a scheme Beam (or a
+    BeamSpec passed in), its id, and its analysis when the scheme asks for
+    results. Without an engine installed the result is None and the notice
+    says so, to be drawn in place of the results.
     """
     beam, name = _find_beam(block, block_key, context)
     if not isinstance(beam, Beam) or not beam.results.requested:
-        return beam, name, None
-    try:
-        result = analysis.analyze(beam, list(beam.results.diagrams), beam.results.engine)
-    except ImportError as err:
-        warnings.warn(f"{err}; drawing the beam without results", stacklevel=2)
-        return beam, name, None
-    return beam, name, result
+        return beam, name, None, []
+    result, notice = analyze_beam(beam, stacklevel=2)
+    return beam, name, result, notice
 
 
 def _find_beam(block: BeamBlock, block_key: str, context: dict):

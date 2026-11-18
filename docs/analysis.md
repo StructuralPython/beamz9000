@@ -19,7 +19,8 @@ uv add "beamz9000[pynite]"   # pynite-tools
 ```
 
 Without an engine, a beam with `results` is drawn without them, with a
-warning. pycba is licensed under the AGPL-3.0; PyniteFEA under the MIT
+warning, and a note where they would be: *Results not shown: the pycba
+analysis engine is not installed.* pycba is licensed under the AGPL-3.0; PyniteFEA under the MIT
 licence.
 
 ## Ask for results

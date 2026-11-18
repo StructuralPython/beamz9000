@@ -138,6 +138,33 @@ def test_missing_engine_warns_and_draws_without_results(monkeypatch):
     with pytest.warns(UserWarning, match=r"needs pycba-tools.*beamz9000\[pycba\]"):
         spec = from_scheme(beam)
     assert spec.reactions == []
+    assert spec.notice == [
+        "Results not shown: the pycba analysis engine is not installed.",
+        "Install beamz9000[pycba] to show them.",
+    ]
+
+
+def test_missing_engine_notice_is_drawn_in_place_of_the_results(monkeypatch):
+    monkeypatch.setattr(analysis, "available_engines", lambda: [])
+    beam = _beam(loads=[{"dist": {"w": "2 kN/m", "case": "D"}}], results={"diagrams": ["forces"], "engine": "auto"})
+    with pytest.warns(UserWarning):
+        diagram = bz.beam_diagram(beam)
+    note = next(c for c in diagram.children if c.role == "notice")
+    assert [t.text for t in note.children] == [
+        "Results not shown: no analysis engine is installed.",
+        "Install beamz9000[pycba] or beamz9000[pynite] to show them.",
+    ]
+    dims = next(c for c in diagram.children if c.role == "dimensions")
+    assert note.bounds[3] < dims.bounds[1]  # Below the dimensions, where results go.
+
+
+def test_no_notice_when_results_are_found_or_not_asked_for():
+    with_results = _beam(loads=[{"dist": {"w": "2 kN/m", "case": "D"}}], results=["forces"])
+    without = _beam(loads=[{"dist": {"w": "2 kN/m", "case": "D"}}])
+    for beam in (with_results, without):
+        diagram = bz.beam_diagram(beam)
+        assert from_scheme(beam).notice == []
+        assert all(c.role != "notice" for c in diagram.children)
 
 
 def test_pycba_is_the_default_engine():
