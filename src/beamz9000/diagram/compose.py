@@ -486,6 +486,23 @@ def reactions(spec: BeamSpec, layout: Layout, top: float) -> Group:
     return group(parts, role="reactions")
 
 
+def notice(spec: BeamSpec, layout: Layout, top: float) -> Group:
+    """
+    The spec's notice (results asked for but not found: no analysis engine),
+    left-aligned under the beam's left end, below 'top', in place of the results.
+    """
+    if not spec.notice:
+        return group(role="notice")
+    L = spec.length
+    fs = _font_size(layout, L)
+    y = top - layout.result_gap * L
+    texts = []
+    for line in spec.notice:
+        texts.append(label(line, (spec.nodes[0], y), layout, L, ha="left", va="top"))
+        y -= layout.reaction_line * fs
+    return group(texts, role="notice")
+
+
 def result_diagrams(spec: BeamSpec, layout: Layout, top: float) -> Group:
     """The result diagrams, stacked downward from 'top'."""
     panels = []
@@ -844,8 +861,11 @@ def _compose(spec: BeamSpec, layout: Layout, position: str) -> Group:
         lowest = rxn.bounds[1]
     dims = dimensions(spec, layout, top=lowest)
     results = result_diagrams(spec, layout, top=dims.bounds[1])
-    # Reactions and result diagrams only appear when the beam was analysed.
-    parts = [loads, beam, sup, labels, rxn if len(rxn) else None, dims, results if len(results) else None]
+    note = notice(spec, layout, top=dims.bounds[1])
+    # Reactions and result diagrams only appear when the beam was analysed; the
+    # notice when results were asked for but no analysis engine is installed.
+    parts = [loads, beam, sup, labels, rxn if len(rxn) else None, dims,
+             results if len(results) else None, note if len(note) else None]
     if layout.legend:
         parts.append(legend(spec, layout, group(parts).bounds, position))
     parts = [p for p in parts if p is not None]

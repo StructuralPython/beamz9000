@@ -73,6 +73,21 @@ def test_block_without_results_adds_nothing(tmp_path):
     assert context["vars"] == {}
 
 
+def test_block_without_an_engine_draws_the_notice(tmp_path, monkeypatch):
+    from beamz9000 import ymprint as block
+
+    monkeypatch.setattr(analysis, "available_engines", lambda: [])
+    seen = {}
+    real = block.from_scheme
+    monkeypatch.setattr(block, "from_scheme", lambda *a, **k: seen.setdefault("spec", real(*a, **k)))
+    context = {**PAGE, "base_dir": str(tmp_path), "vars": {}}
+    beam = {"spans": ["3 m"], "loads": [{"dist": {"w": "2 kN/m"}}], "results": ["forces"]}
+    with pytest.warns(UserWarning, match="without results"):
+        block.beam_block("_beam_b", {"beam": beam}, context)
+    assert seen["spec"].notice[0].startswith("Results not shown")
+    assert context["vars"] == {}
+
+
 def test_results_are_usable_in_the_document(tmp_path):
     from beamz9000.ymprint import app
 

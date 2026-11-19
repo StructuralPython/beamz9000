@@ -142,6 +142,11 @@ class BeamSpec(_Frozen):
     length_label: str
     reactions: list[SpecReaction] = Field(default_factory=list, description="From an analysis, if any.")
     diagrams: list[SpecDiagram] = Field(default_factory=list, description="Result diagrams, in order.")
+    notice: list[str] = Field(
+        default_factory=list,
+        description="Lines drawn where the results would be when they could not be found "
+        "(no analysis engine installed); empty otherwise.",
+    )
     legend: Optional[Literal["auto", "right", "top", "none"]] = Field(
         None, description="The scheme's `display.legend`, used unless the Layout sets its own.",
     )
@@ -156,7 +161,7 @@ class BeamSpec(_Frozen):
 
 
 def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool = False,
-                analyze: bool = True, result=None) -> BeamSpec:
+                analyze: bool = True, result=None, notice: Optional[list[str]] = None) -> BeamSpec:
     """
     Returns the BeamSpec for a scheme Beam.
 
@@ -167,9 +172,11 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
 
     With 'analyze' and `results` in the scheme, the beam is analysed and the
     spec carries its reactions and result diagrams. Without an analysis
-    engine installed, it is drawn without them, with a warning. 'result', an
-    AnalysisResult of the beam already found with `analysis.analyze`, is used
-    instead of analysing it again.
+    engine installed, it is drawn without them, with a warning, and a notice
+    where they would be (see `engine_notice`). 'result', an AnalysisResult of
+    the beam already found with `analysis.analyze`, is used instead of
+    analysing it again; 'notice' is the notice of an analysis that already
+    failed.
     """
     loads: list[SpecLoad] = []
     keys: dict[str, KeyKind] = {}
@@ -192,8 +199,10 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
 
     details = _pressure_details(beam, resolved, keys)
     reactions, diagrams = [], []
-    if analyze and beam.results.requested:
-        result = result if result is not None else _analyze(beam)
+    notice = list(notice or [])
+    if analyze and beam.results.requested and not notice:
+        if result is None:
+            result, notice = analyze_beam(beam, stacklevel=3)
         if result is not None:
             for case in result.cases:
                 if case is not None:
@@ -215,6 +224,7 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         length_label=units.label(beam.length),
         reactions=reactions,
         diagrams=diagrams,
+        notice=notice,
         legend=beam.display.legend,
     )
 
@@ -222,14 +232,28 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
 # --- Results ----------------------------------------------------------------------------
 
 
-def _analyze(beam: Beam):
+def analyze_beam(beam: Beam, stacklevel: int = 2):
+    """
+    Returns (result, notice): the beam's AnalysisResult and no notice, or, when
+    its analysis engine is not installed, None and the notice to draw in place
+    of the results (with a warning, as before).
+    """
     from beamz9000 import analysis
 
     try:
-        return analysis.analyze(beam, list(beam.results.diagrams), beam.results.engine)
+        return analysis.analyze(beam, list(beam.results.diagrams), beam.results.engine), []
     except ImportError as err:
-        warnings.warn(f"{err}; drawing the beam without results", stacklevel=3)
-        return None
+        warnings.warn(f"{err}; drawing the beam without results", stacklevel=stacklevel + 1)
+        return None, engine_notice(beam.results.engine)
+
+
+def engine_notice(engine: str) -> list[str]:
+    """The lines drawn in place of the results when 'engine' is not installed."""
+    if engine == "auto":
+        return ["Results not shown: no analysis engine is installed.",
+                "Install beamz9000[pycba] or beamz9000[pynite] to show them."]
+    return [f"Results not shown: the {engine} analysis engine is not installed.",
+            f"Install beamz9000[{engine}] to show them."]
 
 
 def _result_units(beam: Beam) -> Optional[dict[str, str]]:
