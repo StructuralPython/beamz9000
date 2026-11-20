@@ -89,6 +89,23 @@ def test_engines_agree(beam_id):
         assert np.max(np.abs(np.subtract(ca.y, cb.y))) <= 2e-3 * scale
 
 
+@pytest.mark.parametrize("engine", ENGINES)
+def test_trapezoid_across_spans_carries_its_load(engine):
+    """
+    Pynite 3.2.1 misloads a sub-member that a trapezoidal load runs right
+    across, so a load over three or more spans carried the wrong total.
+    """
+    beam = _beam(
+        spans=["2 m", "2 m", "2 m"],
+        loads=[{"dist": {"mag1": "5 kN/m", "mag2": "30 kN/m", "x1": "500 mm", "x2": "5500 mm", "case": "D"}}],
+    )
+    result = analysis.analyze(beam, ["moment"], engine)
+    assert sum(r.fy for r in result.reactions) == pytest.approx(87.5e3, rel=1e-9)
+    other = analysis.analyze(beam, ["moment"], "pycba" if engine == "pynite" else "pynite")
+    for ra in result.reactions:
+        assert other.reaction(ra.node, ra.case).fy == pytest.approx(ra.fy, rel=1e-6)
+
+
 def test_uncased_loads_form_an_unnamed_case():
     beam = _beam(loads=[{"point": {"p": "10 kN", "x": "3 m"}}], results=["forces", "reactions"])
     result = analysis.analyze(beam, ["moment"])

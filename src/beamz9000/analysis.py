@@ -454,7 +454,7 @@ def _pynite_dict(inputs: _Inputs) -> dict:
         elif l.kind == "moment":
             pt_loads.append(["MZ", l.mag1, l.x1, _name(l.case)])
         else:
-            dist_loads.append(["FY", -l.mag1, -l.mag2, l.x1, l.x2, _name(l.case), False])
+            dist_loads += [["FY", -w1, -w2, a, b, _name(l.case), False] for a, b, w1, w2 in _split_at_nodes(l, inputs.nodes)]
     return {
         "nodes": nodes,
         "materials": {"material": material},
@@ -469,6 +469,20 @@ def _pynite_dict(inputs: _Inputs) -> dict:
         },
         "load_combos": _combos(inputs),
     }
+
+
+def _split_at_nodes(l: _Load, nodes: list[float]) -> list[tuple[float, float, float, float]]:
+    """
+    A line load as (x1, x2, w1, w2) pieces split at the internal nodes. Pynite
+    3.2.1 gives the wrong intensity to a sub-member that a trapezoidal load
+    runs right across, so one load over three or more spans carried the
+    wrong total; split, no piece runs right across a span.
+    """
+    tol = 1e-9 * (nodes[-1] - nodes[0])
+    cuts = [x for x in nodes[1:-1] if l.x1 + tol < x < l.x2 - tol]
+    edges = [l.x1] + cuts + [l.x2]
+    w = lambda x: l.mag1 + (l.mag2 - l.mag1) * (x - l.x1) / (l.x2 - l.x1)
+    return [(a, b, w(a), w(b)) for a, b in zip(edges, edges[1:])]
 
 
 # --- Results --------------------------------------------------------------------------
