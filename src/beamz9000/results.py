@@ -15,10 +15,12 @@ variables under the beam's name)::
     }
 
 - `units` is None for a scheme in plain numbers; the values are then in its
-  own consistent units.
+  own consistent units. A beam on a foundation adds `pressure` (e.g. kPa, or
+  kN/m for a foundation without a `width`).
 - Supports are keyed by their node label, or `N0`, `N1`, ... without one.
   Loads without a case are under `uncased`.
-- Each result asked for under `results` (shear, moment, deflection, rotation)
+- Each result asked for under `results` (shear, moment, deflection, rotation,
+  pressure)
   lists each load case, or, when its group has load combinations, each
   combination plus their `envelope`. Reactions list each case, each force
   combination, and their `max` and `min`.
@@ -34,15 +36,16 @@ from beamz9000.analysis import AnalysisResult
 from beamz9000.scheme import Beam
 
 UNCASED_KEY = "uncased"
-QUANTITIES = ("shear", "moment", "deflection", "rotation")
-_KIND = {"shear": "force", "moment": "moment", "deflection": "length", "rotation": "rotation"}
+QUANTITIES = ("shear", "moment", "deflection", "rotation", "pressure")
 
 
 def results_dict(beam: Beam, result: AnalysisResult) -> dict:
     """Returns 'result', the analysis of 'beam', as a plain dict in the scheme's units (see the module)."""
-    from beamz9000.spec import _result_units
+    from beamz9000.spec import _diagram_units, _result_units
 
     shown = _result_units(beam)
+    kind_of = _diagram_units(beam)
+    kind_of["deflection"] = "length"
     x_unit = units.unit_of(beam.spans[0]) if shown is not None else None
     if x_unit not in units.RESULT_UNITS["length"]:
         x_unit = None if shown is None else "m"
@@ -73,6 +76,8 @@ def results_dict(beam: Beam, result: AnalysisResult) -> dict:
         "units": None if shown is None else {
             "force": shown["force"], "moment": shown["moment"], "deflection": shown["length"],
             "rotation": "rad", "x": x_unit,
+            # A beam on a foundation: its soil pressure (or reaction per length).
+            **({"pressure": shown[kind_of["pressure"]]} if beam.foundation is not None else {}),
         },
         "cases": [_key(c) for c in result.cases],
         "combos": {group: list(names) for group, names in result.combos.items()},
@@ -84,11 +89,11 @@ def results_dict(beam: Beam, result: AnalysisResult) -> dict:
             continue
         entry = {}
         for c in curves:
-            entry[_key(c.case)] = _extremes(c.x, c.y, lambda v: value(v, _KIND[q]), x)
+            entry[_key(c.case)] = _extremes(c.x, c.y, lambda v: value(v, kind_of[q]), x)
         envelope = result.envelope(q)
         if envelope is not None:
-            hi = _extremes(envelope.x, envelope.max, lambda v: value(v, _KIND[q]), x)
-            lo = _extremes(envelope.x, envelope.min, lambda v: value(v, _KIND[q]), x)
+            hi = _extremes(envelope.x, envelope.max, lambda v: value(v, kind_of[q]), x)
+            lo = _extremes(envelope.x, envelope.min, lambda v: value(v, kind_of[q]), x)
             entry["envelope"] = {"max": hi["max"], "x_max": hi["x_max"], "min": lo["min"], "x_min": lo["x_min"]}
         out[q] = entry
     out["model"] = result.model
