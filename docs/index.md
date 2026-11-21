@@ -42,6 +42,10 @@ bz.draw("drawing_features.yaml", "B2.svg", beam_id="B2")
   the beam is analysed with pycba or PyniteFEA: shear, moment, deflection and
   rotation diagrams below, and reactions under every support. Per load case,
   or as factored envelopes over your load combinations.
+- **Beams on soil.** `foundation: {ks: [null, 20 MPa/m], width: 2500 mm}` puts
+  a footing on an elastic foundation, linear or compression only, and
+  `results: [pressure]` draws the soil pressure under it. Where soil would
+  have to pull, the footing lifts off instead.
 - **Diagrams that read the same every time.** Loads are drawn in bands per load
   case or occupancy, above the beam, then the supports and the dimensions, with
   a colour-blind-safe legend.

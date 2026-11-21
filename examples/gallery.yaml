@@ -35,3 +35,22 @@ floor_beam:
     - point: {p: 18 kN, span_loc: [1, 2.4 m], case: L}
   occupancies:
     office: {D: 2.0 kPa, L: 2.4 kPa}
+
+# A core footing on soil that only pushes: three columns, and a lift core whose
+# walls push down 5000 kN and pull up 3000 kN under lateral load. The heel
+# under the tension flange lifts off the soil.
+core_footing:
+  spans: [14000 mm]
+  e: 25 GPa
+  i: 360e9 mm**4                      # 2500 wide x 1200 deep
+  depth: 1200 mm
+  foundation:
+    ks: [null, 20 MPa/m]              # compression only: soil can't hold the footing down
+    width: 2500 mm
+  loads:
+    - point: {p: 1500 kN, loc: 800 mm}        # column C1
+    - point: {p: 1800 kN, loc: 3800 mm}       # column C2
+    - point: {p: 1500 kN, loc: 6800 mm}       # column C3
+    - point: {p: 5000 kN, loc: 9500 mm}       # core wall, compression flange
+    - point: {p: -3000 kN, loc: 12500 mm}     # core wall, tension flange (60%)
+  results: [pressure, deflection, moment, shear]
