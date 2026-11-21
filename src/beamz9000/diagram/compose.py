@@ -179,8 +179,48 @@ def _stiffness_label(spec: BeamSpec, layout: Layout, idx: int, text: str, glyph:
     return label(text, (spec.nodes[idx], glyph[1] - gap), layout, L, va="top")
 
 
-def node_labels(spec: BeamSpec, layout: Layout, supports_group: Group) -> Group:
-    """Each node's label, centred under its node on a line below the lowest support."""
+def foundation(spec: BeamSpec, layout: Layout) -> Group:
+    """
+    An elastic foundation under the beam: a row of springs, as tall as a
+    support, standing on one ground line along the beam. A supported node's
+    glyph takes the place of the springs around it, on the same ground.
+    """
+    if spec.foundation is None:
+        return group(role="foundation")
+    L = spec.length
+    gw = layout.glyph_width * L
+    d = _half_depth(spec)
+    x0, x1 = spec.nodes[0], spec.nodes[-1]
+    supported = [x for x, k in zip(spec.nodes, spec.supports) if k != "free"]
+    n = max(4, round(L / gw))
+    xs = [x0 + (x1 - x0) * i / n for i in range(n + 1)]
+    xs = [x for x in xs if all(abs(x - xs_) > 0.6 * gw for xs_ in supported)]
+    coils = [glyphs.place(glyphs.spring_coil(gw), (x, -d)) for x in xs]
+    width = L + gw / 2
+    ticks = max(4, round(3 * width / gw) + 1)
+    ground = glyphs.place(glyphs.ground(gw, ticks, width=width), ((x0 + x1) / 2, -d))
+    return group([
+        Shape(geometry=MultiLineString([*(c for c in coils), *ground.geoms]), stroke_color=layout.ink,
+              stroke_width=layout.stroke_width, z=Z_SUPPORT),
+    ], role="foundation")
+
+
+def foundation_label(spec: BeamSpec, layout: Layout, top: float) -> Group:
+    """The foundation's modulus, below 'top', under the middle of the longest span."""
+    if spec.foundation is None:
+        return group(role="foundation_label")
+    L = spec.length
+    gap = layout.label_gap * _font_size(layout, L)
+    i = max(range(len(spec.spans)), key=lambda j: spec.spans[j])
+    x = (spec.nodes[i] + spec.nodes[i + 1]) / 2
+    return group([label(spec.foundation.label, (x, top - gap), layout, L, va="top")], role="foundation_label")
+
+
+def node_labels(spec: BeamSpec, layout: Layout, supports_group: Group, floor: Optional[float] = None) -> Group:
+    """
+    Each node's label, centred under its node on a line below the lowest
+    support (and below 'floor', e.g. a foundation's ground, if given).
+    """
     L = spec.length
     fs = _font_size(layout, L)
     gap = layout.label_gap * fs
@@ -191,7 +231,7 @@ def node_labels(spec: BeamSpec, layout: Layout, supports_group: Group) -> Group:
         parts = [c for c in sup.children if not (isinstance(c, Shape) and c.is_empty)]
         by_node[i] = min(c.bounds[1] for c in parts)
     # All labels share one line, under the lowest support.
-    bottom = min([*by_node.values(), -_half_depth(spec)])
+    bottom = min([*by_node.values(), -_half_depth(spec), *([] if floor is None else [floor])])
     parts = [
         label(text, (x, bottom - gap), layout, L, va="top", font_weight="bold")
         for x, text in zip(spec.nodes, spec.node_labels or [])
@@ -529,7 +569,9 @@ def result_panel(spec: BeamSpec, layout: Layout, diagram: SpecDiagram) -> Group:
     gap = layout.label_gap * fs
     x0, x1 = spec.nodes[0], spec.nodes[-1]
     biggest = max((abs(v) for c in diagram.curves for v in c.y), default=0.0)
-    flip = -1.0 if diagram.kind == "moment" and layout.moment_on_tension_side else 1.0
+    # Moment on the tension side, and soil pressure below the beam like the
+    # pressure block under a footing.
+    flip = -1.0 if (diagram.kind == "moment" and layout.moment_on_tension_side) or diagram.kind == "pressure" else 1.0
     k = 0.0 if biggest == 0 else flip * layout.result_height * L / biggest
     color = lambda key: key_color(spec, layout, key)
 
@@ -852,9 +894,12 @@ def _shape(bounds: Bounds, margin: float) -> float:
 def _compose(spec: BeamSpec, layout: Layout, position: str) -> Group:
     beam = beam_line(spec, layout)
     sup = supports(spec, layout)
-    labels = node_labels(spec, layout, sup)
+    soil = foundation(spec, layout)
+    labels = node_labels(spec, layout, sup, floor=soil.bounds[1] if len(soil) else None)
+    soil_label = foundation_label(spec, layout, top=min(g.bounds[1] for g in (soil, labels, sup) if len(g))
+                                  if len(soil) else 0.0)
     loads = load_bands(spec, layout, base=_half_depth(spec))
-    below = [g.bounds[1] for g in (sup, labels) if len(g)]
+    below = [g.bounds[1] for g in (sup, labels, soil, soil_label) if len(g)]
     lowest = min([*below, -_half_depth(spec)])
     rxn = reactions(spec, layout, top=lowest)
     if len(rxn):
@@ -864,7 +909,8 @@ def _compose(spec: BeamSpec, layout: Layout, position: str) -> Group:
     note = notice(spec, layout, top=dims.bounds[1])
     # Reactions and result diagrams only appear when the beam was analysed; the
     # notice when results were asked for but no analysis engine is installed.
-    parts = [loads, beam, sup, labels, rxn if len(rxn) else None, dims,
+    parts = [loads, beam, soil if len(soil) else None, sup, labels, soil_label if len(soil_label) else None,
+             rxn if len(rxn) else None, dims,
              results if len(results) else None, note if len(note) else None]
     if layout.legend:
         parts.append(legend(spec, layout, group(parts).bounds, position))
