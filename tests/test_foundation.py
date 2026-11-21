@@ -225,3 +225,22 @@ def test_results_dict_has_the_pressure():
     out = results_dict(beam, analysis.analyze(beam, ["pressure"]))
     assert out["units"]["pressure"] == "kPa"
     assert out["pressure"]["D"]["max"] == pytest.approx(371.1, rel=2e-3)
+
+
+def test_a_core_footing_on_both_engines():
+    """Columns and a core couple near the heel: the heel lifts, and the engines agree, beside each load too."""
+    beam = bz.parse_scheme({"_environment": "structural", "F": {
+        "spans": ["14000 mm"], "e": "25 GPa", "i": "360e9 mm**4",
+        "foundation": {"ks": [None, "20 MPa/m"], "width": "2500 mm"},
+        "loads": [{"point": {"p": f"{p} kN", "loc": f"{x} mm"}}
+                  for p, x in ((1500, 800), (1800, 3800), (1500, 6800), (5000, 9500), (-3000, 12500))],
+    }})["F"]
+    kinds = ["shear", "moment", "pressure"]
+    a, b = (analysis.analyze(beam, kinds, e) for e in ENGINES)
+    for kind in kinds:
+        ya, yb = np.array(a.curve(kind, None).y), np.array(b.curve(kind, None).y)
+        assert np.abs(ya - yb).max() <= 5e-3 * np.abs(ya).max(), kind
+    p = a.curve("pressure", None)
+    lifted = [x for x, v in zip(p.x, p.y) if v <= 0]
+    assert lifted and min(lifted) == pytest.approx(10.6, abs=0.1)  # The heel lets go.
+    assert np.trapezoid(p.y, p.x) * 2.5 == pytest.approx(6800e3, rel=1e-3)
