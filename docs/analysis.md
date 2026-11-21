@@ -37,6 +37,7 @@ results: [forces, deflections, reactions]
 | `moment` | moment |
 | `deflection`, `deflections` | deflection |
 | `rotation`, `rotations` | rotation |
+| `pressure` | the soil pressure under a beam on a `foundation` (see below) |
 
 The mapping form also picks the engine:
 
@@ -64,6 +65,7 @@ pynite-tools otherwise. Both engines give the same results.
   needs its EI.
 - Angled point loads add a horizontal reaction at the first pin, fixed support
   or rotational spring. Rollers and vertical springs slide.
+- A beam on a `foundation` needs its EI. See {ref}`foundations`.
 
 (load-combinations)=
 ## Load combinations
@@ -98,11 +100,41 @@ load_combos:              # or one set per group of results
 ```{literalinclude} ../examples/analysis.yaml
 :language: yaml
 :start-at: "factored_floor_beam:"
+:end-before: "# A strip footing"
 ```
 
 ```{beam-figure} analysis.yaml factored_floor_beam
 :size: 6.5 5.6
 ```
+
+(foundations)=
+## Beams on a foundation
+
+```{literalinclude} ../examples/analysis.yaml
+:language: yaml
+:start-at: "# A strip footing"
+```
+
+```{beam-figure} analysis.yaml on_foundation
+:size: 6.5 7.2
+```
+
+- **pycba** (through pycba-tools) analyses each span on its foundation, divided
+  into short pieces. **pynite** (through pynite-tools) puts closely spaced
+  support springs along the beam. The two agree to within a fraction of a
+  percent.
+- A **compression-only** foundation is not linear, so each load case and each
+  combination is analysed on its own, until the edge of the contact stops
+  moving. A combination's results are not the sum of its cases'.
+- A foundation **stiffer in compression than in tension**, but not compression
+  only, needs the pycba engine. `engine: auto` picks it, and `engine: pynite`
+  says so: Pynite allows one spring per direction at a node.
+- **pressure** is the soil pressure (compression positive), drawn below its
+  axis like the pressure block under a footing: the foundation's modulus in
+  use times the deflection, over the `width`. A foundation given by `kf`
+  without a `width` draws the **foundation reaction** per length instead.
+- A beam that would lift clear of a compression-only foundation, with no
+  supports to hold it, can't be analysed, and the error says so.
 
 ## Reading the diagram
 

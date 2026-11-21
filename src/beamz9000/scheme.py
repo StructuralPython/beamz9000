@@ -65,6 +65,8 @@ Moment = Annotated[Any, _kind("moment")]
 Modulus = Annotated[Any, _kind("modulus")]
 Inertia = Annotated[Any, _kind("inertia")]
 Stiffness = Annotated[Any, _kind("stiffness")]
+SubgradeModulus = Annotated[Any, _kind("subgrade_modulus")]
+FoundationModulus = Annotated[Any, _kind("foundation_modulus")]
 
 
 def _location(value: Any) -> Any:
@@ -100,7 +102,7 @@ _SUPPORT_ALIASES = {
     "v_spring": "spring", "vertical_spring": "spring",
     "m_spring": "rotational_spring", "rot_spring": "rotational_spring",
 }
-Diagram = Literal["moment", "shear", "deflection", "rotation"]
+Diagram = Literal["moment", "shear", "deflection", "rotation", "pressure"]
 
 
 class _Model(BaseModel):
@@ -292,7 +294,7 @@ def _combo(value: Any) -> Any:
 COMBO_GROUPS = ("forces", "deflections")
 _GROUP_ALIASES = {"forces": "forces", "force": "forces", "deflections": "deflections", "deflection": "deflections"}
 # The group each result is enveloped over.
-QUANTITY_GROUP = {"shear": "forces", "moment": "forces", "reactions": "forces",
+QUANTITY_GROUP = {"shear": "forces", "moment": "forces", "reactions": "forces", "pressure": "forces",
                   "deflection": "deflections", "rotation": "deflections"}
 
 
@@ -350,6 +352,8 @@ _RESULT_NAMES = {
     "deflections": ["deflection"],
     "rotation": ["rotation"],
     "rotations": ["rotation"],
+    "pressure": ["pressure"],
+    "soil_pressure": ["pressure"],
     "reactions": [],  # Not a diagram: sets `reactions`.
 }
 
@@ -381,7 +385,8 @@ class Results(_Model):
     diagrams: Annotated[list[Diagram], BeforeValidator(_diagram_names)] = Field(
         default_factory=list,
         description="Diagrams to draw below the beam: forces (shear and moment), shear, "
-        "moment, deflection(s), rotation(s).",
+        "moment, deflection(s), rotation(s), pressure (the soil pressure under a beam on a "
+        "`foundation`).",
     )
     reactions: bool = Field(False, description="Draw each support's reactions under it.")
     engine: Literal["pycba", "pynite", "auto"] = Field(
@@ -484,6 +489,102 @@ def _support_item(value: Any) -> Any:
 SupportIn = Annotated[Support, BeforeValidator(_support_item)]
 
 
+# --- Foundation -------------------------------------------------------------------
+
+
+def _modulus_pair(value: Any) -> Any:
+    """A modulus as [tension, compression]; one value is the same both ways."""
+    if value is None or isinstance(value, (list, tuple)):
+        return value
+    if isinstance(value, str):
+        return value  # Left for the kind check to explain.
+    return [units.scale(value, -1), value]
+
+
+class Foundation(_Model):
+    """
+    An elastic (Winkler) foundation under the whole beam, such as the soil
+    under a strip footing. Give its modulus as `[tension, compression]`:
+
+    - `ks`, a subgrade modulus (pressure per length, e.g. 5 MPa/m), with the
+      beam's `width`: the beam sees ks × width;
+    - or `kf`, the modulus per length of beam (force per length per length).
+
+    The compression modulus is positive. The tension modulus is written
+    negative for a foundation that also holds the beam down, or null for a
+    compression-only foundation, which the beam lifts off. One value is the
+    same both ways (a linear foundation). A tension modulus smaller than the
+    compression modulus (e.g. [-2 MPa/m, 5 MPa/m]) needs the pycba engine.
+    """
+
+    ks: Optional[Annotated[list[Optional[SubgradeModulus]], BeforeValidator(_modulus_pair)]] = Field(
+        None, description="Subgrade modulus [tension, compression], e.g. [null, 5 MPa/m]; needs `width`.",
+    )
+    kf: Optional[Annotated[list[Optional[FoundationModulus]], BeforeValidator(_modulus_pair)]] = Field(
+        None, description="Modulus per length of beam [tension, compression], e.g. [null, 2.5 MN/m**2].",
+    )
+    width: Optional[Length] = Field(
+        None, description="The beam's width on the foundation: needed with `ks`, and with `kf` "
+        "draws the soil pressure rather than the reaction per length.",
+    )
+
+    @model_validator(mode="after")
+    def _check(self):
+        if (self.ks is None) == (self.kf is None):
+            raise ValueError("a `foundation` takes `ks` (with `width`) or `kf`, not both")
+        name = "ks" if self.ks is not None else "kf"
+        pair = self.ks if self.ks is not None else self.kf
+        if len(pair) != 2:
+            raise ValueError(
+                f"`{name}` is [tension, compression], e.g. [null, 5 MPa/m]; got {len(pair)} values"
+            )
+        tension, compression = pair
+        if compression is None or units.si(compression) <= 0:
+            raise ValueError(f"the compression modulus (the second in `{name}`) must be positive")
+        if tension is not None and units.si(tension) > 0:
+            raise ValueError(
+                f"write the tension modulus (the first in `{name}`) as negative, e.g. "
+                f"[-{units.label(compression)}, {units.label(compression)}], or null for a "
+                f"compression-only foundation"
+            )
+        if self.ks is not None and self.width is None:
+            raise ValueError("a foundation given by `ks` needs the beam's `width`")
+        if self.width is not None and units.si(self.width) <= 0:
+            raise ValueError(f"the foundation `width` must be positive, got {units.label(self.width)}")
+        return self
+
+    @property
+    def moduli(self) -> tuple[Value, Value]:
+        """(tension, compression) as moduli per length of beam; tension as a positive value, 0 for none."""
+        tension, compression = self.ks if self.ks is not None else self.kf
+        if self.ks is not None:
+            compression = compression * self.width
+            tension = None if tension is None else tension * self.width
+        return (0.0 if tension is None else units.scale(tension, -1), compression)
+
+    @property
+    def compression_only(self) -> bool:
+        tension = (self.ks or self.kf)[0]
+        return tension is None or units.si(tension) == 0
+
+    @property
+    def linear(self) -> bool:
+        tension, compression = self.ks or self.kf
+        return tension is not None and units.si(tension) == -units.si(compression)
+
+    @property
+    def label(self) -> str:
+        """As drawn: 'ks = 5 MPa/m, compression only', 'ks = 5 MPa/m', 'ks = 5 MPa/m in compression, 2 MPa/m in tension'."""
+        name = "ks" if self.ks is not None else "kf"
+        tension, compression = self.ks or self.kf
+        text = f"{name} = {units.label(compression)}"
+        if self.compression_only:
+            return text + ", compression only"
+        if self.linear:
+            return text
+        return f"{text} in compression, {units.magnitude_label(tension)} in tension"
+
+
 # --- Beam ---------------------------------------------------------------------
 
 
@@ -527,6 +628,9 @@ class Beam(_Model):
     loads: list[Load] = Field(default_factory=list)
     occupancies: dict[str, dict[str, Pressure]] = Field(default_factory=dict)
     load_combos: LoadCombos = Field(default_factory=LoadCombos)
+    foundation: Optional[Foundation] = Field(
+        None, description="An elastic (Winkler) foundation under the whole beam, e.g. soil under a footing.",
+    )
     results: Results = Field(default_factory=Results)
     display: Display = Field(default_factory=Display, description="How the beam is drawn.")
 
@@ -540,7 +644,8 @@ class Beam(_Model):
             data["occupancies"] = _single_key_items(data["occupancies"], "occupancies")
         if data.get("loads") is None:
             data.pop("loads", None)
-        for key in ("supports", "e", "i", "ei", "cantilever", "results", "depth", "node_labels", "labels", "display"):
+        for key in ("supports", "e", "i", "ei", "cantilever", "results", "depth", "node_labels", "labels", "display",
+                    "foundation"):
             if key in data and (data[key] is None or data[key] is ... or data[key] == "..."):
                 data.pop(key)
         return data
@@ -567,6 +672,9 @@ class Beam(_Model):
             raise ValueError("`cantilever: both` needs at least 3 spans")
         self._check_occupancies()
         _ = self.resolved_loads
+        if "pressure" in self.results.diagrams and self.foundation is None:
+            raise ValueError("the `pressure` diagram is the soil pressure under a beam on a `foundation`; "
+                             "this beam has none")
         if self.stiffness is None and {"deflection", "rotation"} & set(self.results.diagrams):
             warnings.warn(
                 "deflection and rotation diagrams need `e` and `i` (or `ei`); they will be skipped",
@@ -578,6 +686,8 @@ class Beam(_Model):
         """A beam must use quantities throughout or plain numbers throughout."""
         values = list(self.spans) + [self.e, self.i, self.ei, self.depth]
         values += [s.k for s in self.support_specs]
+        if self.foundation is not None:
+            values += [*(self.foundation.ks or self.foundation.kf), self.foundation.width]
         for load in self.loads:
             values += [v for k, v in load if k.startswith(("mag", "loc", "trib")) and not isinstance(v, str)]
             values += [v[1] for k, v in load if k.startswith("span_loc") and v is not None]
@@ -612,7 +722,7 @@ class Beam(_Model):
                 )
         restrained = [t for t in types if t != "free"]
         horizontal = {"pin", "fixed", "rotational_spring"} & set(types)
-        if not ("fixed" in types or (len(restrained) >= 2 and horizontal)):
+        if self.foundation is None and not ("fixed" in types or (len(restrained) >= 2 and horizontal)):
             warnings.warn(f"the supports {types} do not make a stable beam", stacklevel=3)
 
     def _check_occupancies(self):
@@ -666,11 +776,17 @@ class Beam(_Model):
         """
         The support at each node. Unless overridden, a pin at the first
         supported node and rollers at the others, with cantilevered ends free.
-        A single span with one cantilevered end is fixed at the other end.
+        A single span with one cantilevered end is fixed at the other end. A
+        beam on a `foundation` is free at every node: the foundation carries it.
         """
         if isinstance(self.supports, list):
             return list(self.supports)
         n = len(self.spans) + 1
+        if self.foundation is not None:
+            specs = [Support(type="free") for _ in range(n)]
+            for idx, support in (self.supports or {}).items():
+                specs[idx] = support
+            return specs
         free = {"left": {0}, "right": {n - 1}, "both": {0, n - 1}}.get(self.cantilever, set())
         if len(self.spans) == 1 and len(free) == 1:
             types = ["free" if i in free else "fixed" for i in range(n)]

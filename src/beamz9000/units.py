@@ -74,6 +74,8 @@ DIMENSIONS: dict[str, Dimensions] = {
     "stiffness": _dims(kg=1, m=3, s=-2),
     "spring": _dims(kg=1, s=-2),  # Force per length, e.g. kN/mm.
     "rotational_spring": _dims(kg=1, m=2, s=-2),  # Moment per radian, e.g. kN·m/rad.
+    "subgrade_modulus": _dims(kg=1, m=-2, s=-2),  # Pressure per length, e.g. MPa/m.
+    "foundation_modulus": _dims(kg=1, m=-1, s=-2),  # Force per length per length, e.g. MN/m/m.
 }
 
 
@@ -195,8 +197,12 @@ RESULT_UNITS: dict[str, dict[str, float]] = {
         "lb·ft": 1.3558179, "lb·in": 0.11298483, "kip·ft": 1355.8179, "kip·in": 112.98483,
     },
     "length": {"mm": 1e-3, "cm": 1e-2, "m": 1.0, "in": 0.0254, "ft": 0.3048},
+    "pressure": {"Pa": 1.0, "kPa": 1e3, "MPa": 1e6, "psf": 47.880259, "psi": 6894.7573, "ksf": 47880.259},
+    "line_load": {"N/m": 1.0, "kN/m": 1e3, "MN/m": 1e6, "lb/ft": 14.593903, "kip/ft": 14593.903},
 }
-_DEFAULT_RESULT_UNITS = {"force": "kN", "moment": "kN·m", "length": "mm", "rotation": "rad"}
+_DEFAULT_RESULT_UNITS = {
+    "force": "kN", "moment": "kN·m", "length": "mm", "rotation": "rad", "pressure": "kPa", "line_load": "kN/m",
+}
 _IMPERIAL_LENGTHS = {"in", "ft"}
 
 
@@ -244,6 +250,16 @@ def result_units(values: dict[str, list[Any]]) -> dict[str, str]:
         chosen["moment"] = moment
     if imperial:
         chosen["length"] = "in"
+    # Soil pressures follow the scheme's pressures, else kPa (psf for imperial
+    # spans); line reactions follow its line loads, else the force per span unit.
+    chosen["pressure"] = _first_unit(values.get("pressure", []), RESULT_UNITS["pressure"]) or (
+        "psf" if imperial else "kPa"
+    )
+    line = _first_unit(values.get("line_load", []), RESULT_UNITS["line_load"])
+    if line is None:
+        candidate = f"{chosen['force']}/{'ft' if imperial else 'm'}"
+        line = candidate if candidate in RESULT_UNITS["line_load"] else ("lb/ft" if imperial else "kN/m")
+    chosen["line_load"] = line
     return chosen
 
 

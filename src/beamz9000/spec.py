@@ -104,9 +104,10 @@ class SpecPeak(_Frozen):
     label: str
 
 
-DiagramKind = Literal["shear", "moment", "deflection", "rotation"]
+DiagramKind = Literal["shear", "moment", "deflection", "rotation", "pressure"]
 
-DIAGRAM_TITLES = {"shear": "Shear", "moment": "Moment", "deflection": "Deflection", "rotation": "Rotation"}
+DIAGRAM_TITLES = {"shear": "Shear", "moment": "Moment", "deflection": "Deflection", "rotation": "Rotation",
+                  "pressure": "Soil pressure"}
 
 
 class SpecDiagram(_Frozen):
@@ -114,8 +115,8 @@ class SpecDiagram(_Frozen):
     A result diagram: one curve per load case, or the max and min curves of an
     envelope over the load combinations, and labelled peaks. Values are
     as computed (shear up positive, moment sagging positive, deflection up
-    positive, rotation counter-clockwise positive); the drawing decides which
-    way is up.
+    positive, rotation counter-clockwise positive, soil pressure compression
+    positive); the drawing decides which way is up.
     """
 
     kind: DiagramKind
@@ -123,6 +124,13 @@ class SpecDiagram(_Frozen):
     curves: list[SpecCurve]
     peaks: list[SpecPeak] = Field(default_factory=list)
     envelope: bool = Field(False, description="True for a factored envelope over the load combinations.")
+
+
+class SpecFoundation(_Frozen):
+    """An elastic foundation under the whole beam."""
+
+    label: str = Field(description="As drawn, e.g. 'ks = 5 MPa/m, compression only'.")
+    compression_only: bool = False
 
 
 class BeamSpec(_Frozen):
@@ -136,6 +144,7 @@ class BeamSpec(_Frozen):
     )
     node_labels: list[Optional[str]] = Field(default_factory=list, description="Per node; None for no label.")
     depth: Optional[float] = Field(None, description="Drawn beam depth; None draws a line.")
+    foundation: Optional[SpecFoundation] = Field(None, description="An elastic foundation under the beam.")
     loads: list[SpecLoad] = Field(default_factory=list)
     keys: list[LegendKey] = Field(default_factory=list, description="Legend keys in drawing order.")
     span_labels: list[str]
@@ -209,7 +218,7 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
                     keys.setdefault(case, "case")
             shown = _result_units(beam)
             reactions = _reactions(result, shown) if beam.results.reactions else []
-            diagrams = _diagrams(result, beam.results.diagrams, shown, list(keys))
+            diagrams = _diagrams(result, beam.results.diagrams, shown, list(keys), _diagram_units(beam))
 
     return BeamSpec(
         name=name,
@@ -218,6 +227,9 @@ def from_scheme(beam: Beam, name: Optional[str] = None, split_occupancies: bool 
         support_labels=[_stiffness_label(s) for s in beam.support_specs],
         node_labels=beam.labels,
         depth=units.si(beam.depth) if beam.depth is not None else None,
+        foundation=None if beam.foundation is None else SpecFoundation(
+            label=beam.foundation.label, compression_only=beam.foundation.compression_only,
+        ),
         loads=loads,
         keys=[LegendKey(name=k, kind=v, detail=details.get(k)) for k, v in keys.items()],
         span_labels=[units.label(s) for s in beam.spans],
@@ -305,7 +317,22 @@ def _reactions(result, shown) -> list[SpecReaction]:
     return out
 
 
-_DIAGRAM_UNITS = {"shear": "force", "moment": "moment", "deflection": "length", "rotation": "rotation"}
+_DIAGRAM_UNITS = {"shear": "force", "moment": "moment", "deflection": "length", "rotation": "rotation",
+                  "pressure": "pressure"}
+
+
+def _diagram_units(beam: Beam) -> dict[str, str]:
+    """The kind of value each diagram shows: a foundation without a width gives a reaction per length."""
+    out = dict(_DIAGRAM_UNITS)
+    if beam.foundation is not None and beam.foundation.width is None:
+        out["pressure"] = "line_load"
+    return out
+
+
+def _diagram_title(kind: str, kinds: dict[str, str]) -> str:
+    if kind == "pressure" and kinds["pressure"] == "line_load":
+        return "Foundation reaction"
+    return DIAGRAM_TITLES[kind]
 
 
 def _clean(value: float, biggest: float) -> float:
@@ -313,7 +340,8 @@ def _clean(value: float, biggest: float) -> float:
     return 0.0 if abs(value) <= 1e-6 * biggest else value
 
 
-def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
+def _diagrams(result, kinds, shown, key_order, units_of=None) -> list[SpecDiagram]:
+    units_of = units_of or _DIAGRAM_UNITS
     order = {k: i for i, k in enumerate(key_order)}
     # Loads without a case (None) first, then the cases in legend order.
     cases = sorted(result.cases, key=lambda c: -1 if c is None else order.get(c, len(order)))
@@ -321,7 +349,7 @@ def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
     for kind in kinds:
         envelope = result.envelope(kind)
         if envelope is not None:
-            out.append(_envelope_diagram(kind, envelope, shown))
+            out.append(_envelope_diagram(kind, envelope, shown, units_of))
             continue
         curves = [c for case in cases for c in result.curves if c.quantity == kind and c.case == case]
         if not curves:
@@ -336,25 +364,26 @@ def _diagrams(result, kinds, shown, key_order) -> list[SpecDiagram]:
                 value = _clean(c.y[i], biggest)
                 if any(p.key == c.case and p.x == c.x[i] for p in peaks):
                     continue
-                peaks.append(SpecPeak(key=c.case, x=c.x[i], y=value, label=_fmt(value, _DIAGRAM_UNITS[kind], shown)))
+                peaks.append(SpecPeak(key=c.case, x=c.x[i], y=value, label=_fmt(value, units_of[kind], shown)))
         out.append(SpecDiagram(
-            kind=kind, title=DIAGRAM_TITLES[kind],
+            kind=kind, title=_diagram_title(kind, units_of),
             curves=[SpecCurve(key=c.case, x=list(c.x), y=list(c.y)) for c in curves],
             peaks=peaks,
         ))
     return out
 
 
-def _envelope_diagram(kind: str, env, shown) -> SpecDiagram:
+def _envelope_diagram(kind: str, env, shown, units_of=None) -> SpecDiagram:
     """The max and min curves over the combinations, each with its extreme value labelled."""
+    units_of = units_of or _DIAGRAM_UNITS
     curves = [SpecCurve(key=None, role="max", x=list(env.x), y=list(env.max)),
               SpecCurve(key=None, role="min", x=list(env.x), y=list(env.min))]
     peaks = []  # Always both, even when one is small or zero, so no result looks missing.
     for role, ys, pick in (("max", env.max, max), ("min", env.min, min)):
         i = pick(range(len(ys)), key=lambda j: ys[j])
         peaks.append(SpecPeak(key=None, role=role, x=env.x[i], y=ys[i],
-                                  label=_fmt(ys[i], _DIAGRAM_UNITS[kind], shown)))
-    return SpecDiagram(kind=kind, title=f"{DIAGRAM_TITLES[kind]} envelope",
+                                  label=_fmt(ys[i], units_of[kind], shown)))
+    return SpecDiagram(kind=kind, title=f"{_diagram_title(kind, units_of)} envelope",
                        curves=curves, peaks=peaks, envelope=True)
 
 

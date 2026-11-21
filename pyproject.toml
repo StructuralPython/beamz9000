@@ -26,10 +26,10 @@ ymprint = [
     "ymprint>=0.13.0 ; python_full_version >= '3.14'",
 ]
 pycba = [
-    "pycba-tools>=0.2.0",
+    "pycba-tools>=0.3.1",
 ]
 pynite = [
-    "pynite-tools>=0.9.0",
+    "pynite-tools>=0.10.0",
 ]
 
 # The _beam block for ymprint's `ym` command and every other ymprint application
@@ -53,16 +53,16 @@ exclude = ["**/.ipynb_checkpoints"]
 [dependency-groups]
 dev = [
     "ipykernel>=7.1.0",
-    "pycba-tools>=0.2.0",
-    "pynite-tools>=0.9.0",
+    "pycba-tools>=0.3.1",
+    "pynite-tools>=0.10.0",
     "pytest>=8.3",
     "reportlab>=4.2",
     "ymprint>=0.13.0 ; python_full_version >= '3.14'",
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
-    "pycba-tools>=0.2.0",
-    "pynite-tools>=0.9.0",
+    "pycba-tools>=0.3.1",
+    "pynite-tools>=0.10.0",
     "myst-parser>=5.2.0",
     "shibuya>=2026.7.12",
     "sphinx>=9.1.1",

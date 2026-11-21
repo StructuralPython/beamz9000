@@ -25,6 +25,16 @@ combinations envelope deflection and rotation. Each combination's results are
 included (as reactions and curves whose `case` is the combination's name), and
 `AnalysisResult.envelope()` and `.reaction_envelope()` give their max and min.
 
+A beam on a `foundation` is analysed as a beam on a Winkler foundation: by
+pycba-tools' foundation spans (`kf`, `kf_tension`), or by pynite-tools'
+closely spaced support springs (`add_elastic_foundation`). A compression-only
+foundation is not linear, so each case and combination is analysed on its own
+by contact iteration. Its `pressure` curve is the foundation's reaction (the
+modulus in use times the deflection, compression positive), over the beam's
+`width` when the foundation has one, and per length of beam otherwise. A
+foundation stiffer in compression than in tension, but not compression only,
+needs the pycba engine: Pynite allows one spring per direction at a node.
+
 Horizontal reactions come from statics: the horizontal components of angled
 loads are carried by the first node that restrains horizontal movement (a pin,
 fixed support or rotational spring). Rollers and vertical springs are free to
@@ -51,7 +61,7 @@ MEMBER = "beam"
 UNCASED = "(no case)"
 
 Engine = Literal["auto", "pycba", "pynite"]
-Quantity = Literal["shear", "moment", "deflection", "rotation"]
+Quantity = Literal["shear", "moment", "deflection", "rotation", "pressure"]
 
 # Sampling along the beam: evenly spaced stations plus stations either side of
 # every point load, moment and support, so jumps are captured.
@@ -214,8 +224,8 @@ def analyze(beam: Beam, quantities: Optional[list[str]] = None, engine: Engine =
     with EI = 1, which gives the right forces for a prismatic beam on rigid
     supports; a spring with a stiffness then needs a real EI.
     """
-    engine = resolve_engine(engine)
     inputs = _Inputs.of(beam)
+    engine = _engine_for(inputs, engine)
     quantities = [q for q in (quantities or []) if inputs.has_stiffness or q not in ("deflection", "rotation")]
     if not inputs.cases:
         return AnalysisResult(engine=engine, cases=[])
@@ -233,15 +243,15 @@ def build_model(beam: Beam, engine: Engine = "pycba"):
     FEModel3D, built with its tools package's `load_dict`. Each load case has
     a load combination of the same name, beside the scheme's own combinations.
     """
-    engine = resolve_engine(engine)
+    inputs = _Inputs.of(beam)
+    engine = _engine_for(inputs, engine)
     if engine == "pycba":
         import pycba_tools as tools
-    else:
-        import pynite_tools as tools
-    model = tools.load_dict(model_dict(beam, engine))
-    if engine == "pycba":
+
+        model = tools.load_dict(_pycba_dict(inputs))
         model.analyze()
     else:
+        model = _pynite_model(inputs)
         model.analyze(check_statics=False)
     return model
 
@@ -253,9 +263,34 @@ def model_dict(beam: Beam, engine: Engine = "pycba") -> dict:
     FEModel3D), ready for that package's `load_dict`, or to save with
     `json.dump` and share.
     """
-    engine = resolve_engine(engine)
     inputs = _Inputs.of(beam)
-    return _pycba_dict(inputs) if engine == "pycba" else _pynite_dict(inputs)
+    engine = _engine_for(inputs, engine)
+    if engine == "pycba":
+        return _pycba_dict(inputs)
+    if inputs.foundation is None:
+        return _pynite_dict(inputs)
+    # The foundation's springs are added to the built model (see _pynite_model).
+    import pynite_tools as tools
+
+    return tools.dump_dict(_pynite_model(inputs))
+
+
+def _engine_for(inputs: "_Inputs", engine: Engine) -> str:
+    """
+    The engine to use for 'inputs' (see resolve_engine). A foundation stiffer
+    in compression than in tension, but not compression only, needs pycba:
+    'auto' picks it, and pynite is refused.
+    """
+    if inputs.foundation is not None and not inputs.foundation_on_springs:
+        if engine == "auto":
+            engine = "pycba"
+        elif engine == "pynite":
+            raise ValueError(
+                "a foundation with different moduli in tension and compression needs the pycba "
+                "engine (Pynite allows one spring per direction at a node); use `engine: pycba`, "
+                "or a linear or compression-only foundation"
+            )
+    return resolve_engine(engine)
 
 
 # --- Inputs ---------------------------------------------------------------------------
@@ -272,6 +307,8 @@ class _Inputs:
     loads: list[_Load]
     cases: list[Optional[str]]
     combos: dict[str, dict[str, dict[str, float]]]  # group -> name -> {case: factor}
+    foundation: Optional[tuple[float, float]] = None  # (tension, compression) per length of beam; 0: none
+    foundation_width: Optional[float] = None
 
     @classmethod
     def of(cls, beam: Beam) -> "_Inputs":
@@ -286,6 +323,12 @@ class _Inputs:
         ei = beam.stiffness
         if ei is None and springs:
             raise ValueError("a beam on springs needs its stiffness (`e` and `i`, or `ei`) to be analysed")
+        if ei is None and beam.foundation is not None:
+            raise ValueError("a beam on a foundation needs its stiffness (`e` and `i`, or `ei`) to be analysed")
+        foundation = width = None
+        if beam.foundation is not None:
+            foundation = tuple(units.si(v) for v in beam.foundation.moduli)
+            width = units.si(beam.foundation.width) if beam.foundation.width is not None else None
         loads = _loads(beam)
         combos = _scheme_combos(beam, {l.case for l in loads})
         if any(combos.values()):
@@ -302,7 +345,15 @@ class _Inputs:
             loads=loads,
             cases=cases,
             combos=combos,
+            foundation=foundation,
+            foundation_width=width,
         )
+
+    @property
+    def foundation_on_springs(self) -> bool:
+        """True if Pynite's one-way springs can model the foundation: linear or compression only."""
+        tension, compression = self.foundation
+        return tension == 0.0 or math.isclose(tension, compression, rel_tol=1e-12)
 
     @property
     def all_combos(self) -> dict[str, dict[str, float]]:
@@ -394,9 +445,21 @@ def _pycba_dict(inputs: _Inputs) -> dict:
         "R": R,
         "eletype": [1] * len(spans),
         "D": [None] * len(R),
+        **_pycba_foundation(inputs, len(spans)),
         "load_cases": cases,
         "load_combos": _combos(inputs),
     }
+
+
+def _pycba_foundation(inputs: _Inputs, n_spans: int) -> dict:
+    """pycba-tools' foundation entries: kf (compression) and, unless linear, kf_tension per span."""
+    if inputs.foundation is None:
+        return {}
+    tension, compression = inputs.foundation
+    out = {"kf": [compression] * n_spans}
+    if not math.isclose(tension, compression, rel_tol=1e-12):
+        out["kf_tension"] = [tension] * n_spans
+    return out
 
 
 def _pycba_rows(l: _Load, nodes: list[float]) -> list[list[float]]:
@@ -471,6 +534,53 @@ def _pynite_dict(inputs: _Inputs) -> dict:
     }
 
 
+def _pynite_model(inputs: _Inputs):
+    """
+    The Pynite model of 'inputs', unanalysed: built by pynite-tools from the
+    model dict, then, on a foundation, given its springs by
+    `add_elastic_foundation` (compression-only springs for a compression-only
+    foundation). A support restrained in DY needs no foundation spring (it
+    cannot move), so its restraint is lifted while the springs are added and
+    then restored; a spring support's stiffness is added to its foundation
+    spring.
+    """
+    import pynite_tools as tools
+
+    model = tools.load_dict(_pynite_dict(inputs))
+    if inputs.foundation is None:
+        return model
+    tension, compression = inputs.foundation
+    direction = "-" if tension == 0.0 else None
+    held, springs = [], {}
+    for name, support in zip(inputs.names, inputs.supports):
+        node = model.nodes[name]
+        if node.support_DY:
+            held.append(name)
+            node.support_DY = False
+        elif node.spring_DY[0] is not None:
+            if direction is not None:
+                raise ValueError(
+                    f"the pynite engine cannot put a compression-only foundation under the spring at "
+                    f"node {inputs.names.index(name)}; use the pycba engine"
+                )
+            springs[name] = node.spring_DY[0]
+            node.spring_DY = [None, None, None]
+    foundation = tools.add_elastic_foundation(model, MEMBER, compression, direction=direction)
+    for name in held:
+        model.nodes[name].support_DY = True
+    for name, k in springs.items():
+        node = model.nodes[name]
+        node.spring_DY = [node.spring_DY[0] + k, None, True]
+    # Each node's share of the foundation (see _smooth_shear): its x along the
+    # member and the fraction of its spring that is foundation. A node held by
+    # a support carries none of it.
+    model.beamz_foundation = [
+        (x, compression * t / (compression * t + springs.get(name, 0.0)), name)
+        for name, x, t in zip(foundation.nodes, foundation.x, foundation.tributary) if name not in held
+    ]
+    return model
+
+
 def _split_at_nodes(l: _Load, nodes: list[float]) -> list[tuple[float, float, float, float]]:
     """
     A line load as (x1, x2, w1, w2) pieces split at the internal nodes. Pynite
@@ -535,19 +645,39 @@ def _curves(model, inputs: _Inputs, quantities) -> list[Curve]:
     local = xs - nodes[0]
     n = len(xs)
 
+    def array(action: str, direction: str, key: str, x: np.ndarray) -> np.ndarray:
+        """A member result along 'x'. Pynite's array methods fail when some
+        sub-member has no station in it (a long foundation has many), so then
+        each station is asked for on its own."""
+        try:
+            return getattr(member, f"{action}_array")(direction, len(x), key, x_array=x)[1]
+        except ValueError:
+            return np.array([getattr(member, action)(direction, xi, key) for xi in x])
+
     def values(q: str, key: str) -> np.ndarray:
         if q == "shear":
-            return member.shear_array("Fy", n, key, x_array=local)[1]
+            return array("shear", "Fy", key, local)
         if q == "moment":
             # Pynite's Mz is negative in sagging; diagrams show sagging positive.
-            return -member.moment_array("Mz", n, key, x_array=local)[1]
+            return -array("moment", "Mz", key, local)
         if q == "deflection":
-            return member.deflection_array("dy", n, key, x_array=local)[1]
+            return array("deflection", "dy", key, local)
+        if q == "pressure":
+            # The foundation's modulus in use times the deflection, compression positive.
+            dy = array("deflection", "dy", key, local)
+            tension, compression = inputs.foundation
+            p = -np.where(dy <= 0.0, compression, tension) * dy
+            return p / inputs.foundation_width if inputs.foundation_width else p
         # Rotation: the slope of the deflected shape, from an even grid (the
         # deflection is smooth, so the paired stations at jumps only add noise).
         grid = np.linspace(local[0], local[-1], 4 * _STATIONS + 1)
-        dy = member.deflection_array("dy", len(grid), key, x_array=grid)[1]
+        dy = array("deflection", "dy", key, grid)
         return np.interp(local, grid, np.gradient(dy, grid, edge_order=2))
+
+    def shear(key: str) -> np.ndarray:
+        v = values("shear", key)
+        springs = getattr(model, "beamz_foundation", None)
+        return v if springs is None else _smooth_shear(model, inputs, springs, key, local, v, array)
 
     out = []
     for q in quantities:
@@ -555,9 +685,34 @@ def _curves(model, inputs: _Inputs, quantities) -> list[Curve]:
         combos = inputs.combos[QUANTITY_GROUP[q]]
         rows = [(name, name) for name in combos] if combos else [(c, _name(c)) for c in inputs.cases]
         for case, key in rows:
-            y = np.asarray(values(q, key), dtype=float)
+            y = np.asarray(shear(key) if q == "shear" else values(q, key), dtype=float)
             out.append(Curve(q, case, tuple(xs.tolist()), tuple(np.where(np.abs(y) < 1e-12, 0.0, y).tolist())))
     return out
+
+
+def _smooth_shear(model, inputs: _Inputs, springs, key: str, local: np.ndarray, v: np.ndarray, array) -> np.ndarray:
+    """
+    The shear of a Pynite beam on a foundation, with the foundation's springs
+    spread back into the reaction they stand for. Pynite's shear steps at each
+    spring by the spring's force; this takes those steps out and adds the
+    foundation's reaction, as the modulus in use times the deflection,
+    integrated along the beam. The springs' forces and that integral carry the
+    same load, so the reactions are unchanged.
+    """
+    tension, compression = inputs.foundation
+    grid = np.linspace(local[0], local[-1], 8 * _STATIONS + 1)
+    dy = array("deflection", "dy", key, grid)
+    p = -np.where(dy <= 0.0, compression, tension) * dy  # Up positive, per length.
+    carried = np.concatenate([[0.0], np.cumsum((p[1:] + p[:-1]) / 2 * np.diff(grid))])
+    tol = 1e-9 * (local[-1] - local[0])
+    steps = np.zeros_like(local)
+    for x, share, name in springs:
+        force = share * model.nodes[name].RxnFY[key]
+        # Pynite's shear at a node is that of the sub-member ending there, so
+        # it has passed the node's spring only at the beam's start.
+        passed = (local > x + tol) | ((np.abs(local - x) <= tol) & (x <= local[0] + tol))
+        steps += np.where(passed, force, 0.0)
+    return v - steps + np.interp(local, grid, carried)
 
 
 def _clean(value: float) -> float:
