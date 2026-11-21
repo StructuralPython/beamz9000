@@ -92,6 +92,38 @@ supports:
   - free
 ```
 
+## Foundation
+
+`foundation` puts the whole beam on an elastic (Winkler) foundation, such as
+the soil under a strip footing. Its nodes are then free unless `supports` says
+otherwise: the foundation carries the beam. A `{node index: support}` mapping
+adds supports on top of it.
+
+```yaml
+foundation:
+  ks: [null, 5 MPa/m]     # [tension, compression]
+  width: 500 mm
+```
+
+| Key | Means |
+|---|---|
+| `ks` | A subgrade modulus (pressure per length, e.g. `5 MPa/m` or `36 pci`). Needs `width`: the beam sees ks × width. |
+| `kf` | The modulus per length of beam (force per length per length, e.g. `2.5 MN/m**2`). |
+| `width` | The beam's width on the foundation. With `kf` it is optional, and makes the `pressure` diagram a pressure rather than a reaction per length. |
+
+The modulus is a pair, `[tension, compression]`:
+
+| Written | Foundation |
+|---|---|
+| `[null, 5 MPa/m]` | Compression only: the beam lifts off where it would pull the soil up |
+| `[-5 MPa/m, 5 MPa/m]`, or just `5 MPa/m` | Linear: the same both ways |
+| `[-2 MPa/m, 5 MPa/m]` | Stiffer in compression than in tension (pycba engine only) |
+
+The foundation is drawn as a row of springs on one ground line under the
+beam, with its modulus written below it. A support at a node takes the place
+of the springs around it. Analysing a beam on a foundation needs its
+stiffness (`e` and `i`, or `ei`); see {doc}`analysis`.
+
 ## Drawing
 
 - Labels show quantities as they were written: `12 kN/mm` stays "12 kN/mm"
@@ -118,7 +150,7 @@ supports:
 - A load without a `case` is already factored: it has no legend entry, and
   it is left out of load combinations.
 - `results` analyses the beam: list any of `reactions`, `forces`, `shear`,
-  `moment`, `deflection(s)`, `rotation(s)`, or write
+  `moment`, `deflection(s)`, `rotation(s)`, `pressure` (on a foundation), or write
   `{diagrams: [...], engine: pynite}`. See {doc}`analysis`.
 
 (display)=

@@ -61,3 +61,20 @@ factored_floor_beam:
     deflections:                    # envelope deflection and rotation
       - SLS: {D: 1.0, L: 1.0}
   results: [forces, deflections, reactions]
+
+# A strip footing on soil that only pushes: `foundation` puts the whole beam on
+# an elastic (Winkler) foundation, its nodes are free, and `pressure` draws the
+# soil pressure under it. Here the far end lifts off.
+on_foundation:
+  spans: [6000 mm]
+  e: 25 GPa
+  i: 9000e6 mm**4                   # 500 wide x 600 deep
+  depth: 600 mm
+  node_labels: auto
+  foundation:
+    ks: [null, 5 MPa/m]             # [tension, compression]; null: compression only
+    width: 500 mm                   # the beam sees ks x width
+  loads:
+    - point: {p: 400 kN, loc: 1200 mm, case: D}
+    - dist: {mag1: 10 kN/m, mag2: 30 kN/m, x1: 2000 mm, x2: 6000 mm, case: D}
+  results: [pressure, deflection, moment, shear]

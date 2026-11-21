@@ -131,6 +131,24 @@ supports:
   - free
 ```
 
+### Foundation
+
+`foundation` puts the whole beam on an elastic (Winkler) foundation, such as
+the soil under a strip footing; its nodes are then free unless `supports` says
+otherwise. Give the modulus as `[tension, compression]`:
+
+```yaml
+foundation:
+  ks: [null, 5 MPa/m]     # subgrade modulus; null tension: compression only
+  width: 500 mm           # the beam sees ks x width
+```
+
+`[-5 MPa/m, 5 MPa/m]` (or just `5 MPa/m`) is linear, and `[-2 MPa/m, 5 MPa/m]`
+is stiffer in compression than in tension (pycba engine only). `kf` gives the
+modulus per length of beam instead (e.g. `2.5 MN/m**2`, `width` optional).
+`results: [pressure]` draws the soil pressure. The foundation is drawn as a
+row of springs on one ground line, with its modulus below it.
+
 ### Drawing
 
 - Labels show quantities as they were written: `12 kN/mm` stays "12 kN/mm"
@@ -178,7 +196,8 @@ diagram into any ReportLab document as vector graphics with searchable text.
   left out of load combinations.
 - `results` analyses the beam with pycba-tools or pynite-tools (the `pycba`
   and `pynite` extras): list any of `reactions`, `forces`, `shear`, `moment`,
-  `deflection(s)`, `rotation(s)`, or write `{diagrams: [...], engine: pynite}`.
+  `deflection(s)`, `rotation(s)`, `pressure` (on a foundation), or write
+  `{diagrams: [...], engine: pynite}`.
   Result diagrams are drawn below the beam, with positive moment on the
   tension side, and `reactions` adds each support's reactions under it.
   Without load combinations each load case is drawn; with them, results are
