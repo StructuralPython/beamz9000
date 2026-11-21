@@ -182,8 +182,9 @@ def _stiffness_label(spec: BeamSpec, layout: Layout, idx: int, text: str, glyph:
 def foundation(spec: BeamSpec, layout: Layout) -> Group:
     """
     An elastic foundation under the beam: a row of springs, as tall as a
-    support, standing on one ground line along the beam. A supported node's
-    glyph takes the place of the springs around it, on the same ground.
+    support, standing on a ground line along the beam. At a supported node the
+    support's glyph stands on its own ground, with a gap either side of it in
+    the foundation's ground and springs.
     """
     if spec.foundation is None:
         return group(role="foundation")
@@ -192,15 +193,26 @@ def foundation(spec: BeamSpec, layout: Layout) -> Group:
     d = _half_depth(spec)
     x0, x1 = spec.nodes[0], spec.nodes[-1]
     supported = [x for x, k in zip(spec.nodes, spec.supports) if k != "free"]
+    # A support's ground runs half a glyph either side of it, and its ticks
+    # lean a fifth of a glyph further left; the gap clears both.
+    clear = gw / 2 + 0.35 * gw
     n = max(4, round(L / gw))
     xs = [x0 + (x1 - x0) * i / n for i in range(n + 1)]
-    xs = [x for x in xs if all(abs(x - xs_) > 0.6 * gw for xs_ in supported)]
-    coils = [glyphs.place(glyphs.spring_coil(gw), (x, -d)) for x in xs]
-    width = L + gw / 2
-    ticks = max(4, round(3 * width / gw) + 1)
-    ground = glyphs.place(glyphs.ground(gw, ticks, width=width), ((x0 + x1) / 2, -d))
+    xs = [x for x in xs if all(abs(x - xs_) > clear + 0.15 * gw for xs_ in supported)]
+    lines = [glyphs.place(glyphs.spring_coil(gw), (x, -d)) for x in xs]
+    # The ground, broken around each support.
+    pieces, start = [], x0 - gw / 4
+    for x in sorted(supported):
+        pieces.append((start, x - clear))
+        start = x + clear
+    pieces.append((start, x1 + gw / 4))
+    for a, b in pieces:
+        if b - a < gw / 2:
+            continue
+        ticks = max(2, round(3 * (b - a) / gw) + 1)
+        lines += glyphs.place(glyphs.ground(gw, ticks, width=b - a), ((a + b) / 2, -d)).geoms
     return group([
-        Shape(geometry=MultiLineString([*(c for c in coils), *ground.geoms]), stroke_color=layout.ink,
+        Shape(geometry=MultiLineString(lines), stroke_color=layout.ink,
               stroke_width=layout.stroke_width, z=Z_SUPPORT),
     ], role="foundation")
 
