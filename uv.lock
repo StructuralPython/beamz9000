@@ -125,7 +125,7 @@ docs = [
 requires-dist = [
     { name = "forallpeople", specifier = ">=3.4.0" },
     { name = "matplotlib", specifier = ">=3.11" },
-    { name = "pycba-tools", marker = "extra == 'pycba'", specifier = ">=0.3.2" },
+    { name = "pycba-tools", marker = "extra == 'pycba'", specifier = ">=0.3.3" },
     { name = "pydantic", specifier = ">=2.10" },
     { name = "pynite-tools", marker = "extra == 'pynite'", specifier = ">=0.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -138,7 +138,7 @@ provides-extras = ["pycba", "pynite", "reportlab", "ymprint"]
 [package.metadata.requires-dev]
 dev = [
     { name = "ipykernel", specifier = ">=7.1.0" },
-    { name = "pycba-tools", specifier = ">=0.3.2" },
+    { name = "pycba-tools", specifier = ">=0.3.3" },
     { name = "pynite-tools", specifier = ">=0.10.0" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "reportlab", specifier = ">=4.2" },
@@ -147,7 +147,7 @@ dev = [
 docs = [
     { name = "autodoc-pydantic", specifier = ">=2.2.0" },
     { name = "myst-parser", specifier = ">=5.2.0" },
-    { name = "pycba-tools", specifier = ">=0.3.2" },
+    { name = "pycba-tools", specifier = ">=0.3.3" },
     { name = "pynite-tools", specifier = ">=0.10.0" },
     { name = "shibuya", specifier = ">=2026.7.12" },
     { name = "sphinx", specifier = ">=9.1.1" },
@@ -1503,7 +1503,7 @@ wheels = [
 
 [[package]]
 name = "pycba-tools"
-version = "0.3.2"
+version = "0.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "deepmerge" },
@@ -1511,9 +1511,9 @@ dependencies = [
     { name = "pycba" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/b0/41deb0b36e38ed19e69ee78d084560c47ec0930c44f569f5d21e4a4dd22b/pycba_tools-0.3.2.tar.gz", hash = "sha256:8d1943ee2654e47d0d15afd05fd4e4d883aa5b08afe2dd4eb74f425d156a2f81", size = 39498, upload-time = "2026-11-21T02:15:44.162Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/f2/a31eca4aea19eb5450f0fce8e931d171f24d7b214c3da4bdc7ab4aaa61e0/pycba_tools-0.3.3.tar.gz", hash = "sha256:d84b7f4308a07090304e12fa308670dde5bd934663c7f5579985f266519433d8", size = 39822, upload-time = "2026-11-23T16:41:51.09Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c5/df/7a2fe913a1ad8831bb4511467dfc0d598e97655896643d8f72d23fba7aa1/pycba_tools-0.3.2-py3-none-any.whl", hash = "sha256:e32d13a2b489659f3409544c0db8f9c78db46019536c7aa8790dd21135557afe", size = 38276, upload-time = "2026-11-21T02:15:42.988Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/a2/4c4f8b92a26110fbd5a2f5ffb31c535cd5e90fe54998ca5c10913a0ce958/pycba_tools-0.3.3-py3-none-any.whl", hash = "sha256:2456d427210916f5ad9bd6ccec80c6a6e35bdc1bd61a9432f034df13410feb64", size = 38601, upload-time = "2026-11-23T16:41:50.077Z" },
 ]
 
 [[package]]
