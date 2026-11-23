@@ -26,7 +26,7 @@ ymprint = [
     "ymprint>=0.13.0 ; python_full_version >= '3.14'",
 ]
 pycba = [
-    "pycba-tools>=0.3.2",
+    "pycba-tools>=0.3.3",
 ]
 pynite = [
     "pynite-tools>=0.10.0",
@@ -53,7 +53,7 @@ exclude = ["**/.ipynb_checkpoints"]
 [dependency-groups]
 dev = [
     "ipykernel>=7.1.0",
-    "pycba-tools>=0.3.2",
+    "pycba-tools>=0.3.3",
     "pynite-tools>=0.10.0",
     "pytest>=8.3",
     "reportlab>=4.2",
@@ -61,7 +61,7 @@ dev = [
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
-    "pycba-tools>=0.3.2",
+    "pycba-tools>=0.3.3",
     "pynite-tools>=0.10.0",
     "myst-parser>=5.2.0",
     "shibuya>=2026.7.12",
