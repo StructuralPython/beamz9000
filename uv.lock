@@ -131,7 +131,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "reportlab", marker = "extra == 'reportlab'", specifier = ">=4.2" },
     { name = "shapely", specifier = ">=2.1" },
-    { name = "ymprint", marker = "python_full_version >= '3.14' and extra == 'ymprint'", specifier = ">=0.15.2" },
+    { name = "ymprint", marker = "python_full_version >= '3.14' and extra == 'ymprint'", specifier = ">=0.15.3" },
 ]
 provides-extras = ["pycba", "pynite", "reportlab", "ymprint"]
 
@@ -142,7 +142,7 @@ dev = [
     { name = "pynite-tools", specifier = ">=0.10.0" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "reportlab", specifier = ">=4.2" },
-    { name = "ymprint", marker = "python_full_version >= '3.14'", specifier = ">=0.15.2" },
+    { name = "ymprint", marker = "python_full_version >= '3.14'", specifier = ">=0.15.3" },
 ]
 docs = [
     { name = "autodoc-pydantic", specifier = ">=2.2.0" },
@@ -2473,7 +2473,7 @@ wheels = [
 
 [[package]]
 name = "ymprint"
-version = "0.15.2"
+version = "0.15.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2", marker = "python_full_version >= '3.14'" },
@@ -2487,7 +2487,7 @@ dependencies = [
     { name = "typer", marker = "python_full_version >= '3.14'" },
     { name = "wenmode", marker = "python_full_version >= '3.14'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/be/14/c3c6fbd9384929f2ebcc628e186296c3c128bbd8859543e4b0312ac0ef17/ymprint-0.15.2.tar.gz", hash = "sha256:d8da43636d721661387a953957e104891d7cf8330cb9fb4f996d2bbeb948195d", size = 9953991, upload-time = "2026-11-24T06:20:30.779Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/32/7c/c2b786bc584fcac19b2eb0621a70ccbe900210de2439cd71fe12c2153b94/ymprint-0.15.3.tar.gz", hash = "sha256:f8d8c5406e840b94177437c172f4f809b1146a413ebd4ae6e221fd0f66e8ffd7", size = 9953803, upload-time = "2026-11-24T14:33:47.181Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/0e/d2a75f8b3ddd47cdeb2d4471c2409a43b4efa07fff693ae09af4d4237233/ymprint-0.15.2-py3-none-any.whl", hash = "sha256:66abcf61b2fea48d15989e07ebdad444b51d2b060158be0a315a18449c767f64", size = 9972868, upload-time = "2026-11-24T06:20:28.144Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/bd/64b9edea4b7f3eee2c2f41ddaa58d4bc61631cef2003321446cc51419d02/ymprint-0.15.3-py3-none-any.whl", hash = "sha256:083dfa5ee6c26fbee79df7e2c183f1fbdf8cb9b1874edbbd823512b212cbc652", size = 9972870, upload-time = "2026-11-24T14:33:43.688Z" },
 ]

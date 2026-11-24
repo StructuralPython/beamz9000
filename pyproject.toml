@@ -23,7 +23,7 @@ reportlab = [
     "reportlab>=4.2",
 ]
 ymprint = [
-    "ymprint>=0.15.2 ; python_full_version >= '3.14'",
+    "ymprint>=0.15.3 ; python_full_version >= '3.14'",
 ]
 pycba = [
     "pycba-tools>=0.3.3",
@@ -57,7 +57,7 @@ dev = [
     "pynite-tools>=0.10.0",
     "pytest>=8.3",
     "reportlab>=4.2",
-    "ymprint>=0.15.2 ; python_full_version >= '3.14'",
+    "ymprint>=0.15.3 ; python_full_version >= '3.14'",
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
