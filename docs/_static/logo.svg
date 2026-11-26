@@ -1,8 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke-linejoin="round">
-  <path d="M32 6v16" stroke="#0072B2" stroke-width="4" stroke-linecap="round"/>
-  <path d="M25 18l7 10 7-10z" fill="#0072B2" stroke="#0072B2" stroke-width="2"/>
-  <rect x="4" y="31" width="56" height="7" rx="1.5" fill="currentColor"/>
-  <path d="M10 38l-6 11h12z" fill="#D55E00" stroke="#D55E00" stroke-width="2"/>
-  <circle cx="54" cy="44" r="5.5" fill="#D55E00"/>
-  <path d="M2 54h60" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64" stroke-linejoin="round">
+  <title>beamz9000</title>
+  <!-- "9000", stacked 90 over 00, on a night tile. The fade is the
+       Structural Python logo's three-stop gradient. -->
+  <defs>
+    <linearGradient id="beamz9000-fade" gradientUnits="userSpaceOnUse" x1="0" y1="64" x2="16" y2="0">
+      <stop offset="0" stop-color="#4100c2"/>
+      <stop offset="0.5" stop-color="#d14a4a"/>
+      <stop offset="1" stop-color="#ffe31d"/>
+    </linearGradient>
+    <path id="beamz9000-zero" d="M5 0 L21 0 L26 5 L26 21 L21 26 L5 26 L0 21 L0 5 Z M8.5 6.5 L17.5 6.5 L17.5 19.5 L8.5 19.5 Z"/>
+  </defs>
+  <rect width="64" height="64" rx="13" fill="#160f22"/>
+  <g transform="translate(3 0) skewX(-6)" fill="url(#beamz9000-fade)" fill-rule="evenodd" stroke="#160f22" stroke-width="1.5">
+    <path transform="translate(5 5)" d="M5 0 L21 0 L26 5 L26 21 L21 26 L1 26 L1 19.5 L17.5 19.5 L17.5 15.5 L5 15.5 L0 10.5 L0 5 Z M8.5 5.5 L17.5 5.5 L17.5 10 L8.5 10 Z"/>
+    <use xlink:href="#beamz9000-zero" href="#beamz9000-zero" transform="translate(33 5)"/>
+    <use xlink:href="#beamz9000-zero" href="#beamz9000-zero" transform="translate(5 33)"/>
+    <use xlink:href="#beamz9000-zero" href="#beamz9000-zero" transform="translate(33 33)"/>
+  </g>
 </svg>
