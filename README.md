@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/StructuralPython/beamz9000/main/docs/_static/logo.svg" alt="beamz9000 logo" width="120">
+
 # beamz9000
 
 Beam free-body diagrams from a simple YAML scheme, drawn through shapely geometry.

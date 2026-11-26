@@ -2,6 +2,12 @@
 og:description: Beam free-body diagrams from a simple YAML scheme.
 ---
 
+```{image} _static/logo.svg
+:alt: beamz9000 logo
+:width: 120px
+:class: front-logo
+```
+
 # beamz9000
 
 **Beam free-body diagrams from a simple YAML scheme.** Write down the spans,
